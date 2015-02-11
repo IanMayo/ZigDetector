@@ -33,7 +33,7 @@ public class ZigDetector {
 	public static void main(String[] args) throws Exception {
 		
 		// declare which scenario we're running
-		final String SCENARIO = "Scen1";
+		final String SCENARIO = "Scen2";
 		
 		// load the data
 		Track ownshipTrack = new Track("data/" + SCENARIO +"_Ownship.csv");
@@ -50,7 +50,7 @@ public class ZigDetector {
 		CombinedDomainXYPlot combinedPlot = Plotting.createPlot();
 		
 		// ok create the plots of ownship & target tracks
-		Plotting.addOwnshipData(combinedPlot, "O/S", ownshipTrack, ownshipLegs, null);
+		Plotting.addOwnshipData(combinedPlot, "O/S ", ownshipTrack, ownshipLegs, null);
 		
 		// capture the start time (used for time elapsed at the end)
 		long startTime = System.currentTimeMillis();
