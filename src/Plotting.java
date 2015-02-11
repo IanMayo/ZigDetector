@@ -132,6 +132,11 @@ public class Plotting {
 		final NumberAxis rangeAxis = new LogarithmicAxis("Log(error)");
 		xyPlot.setRangeAxis(rangeAxis);
 
+		XYLineAndShapeRenderer lineRenderer1 = new XYLineAndShapeRenderer(true,
+				true);
+		xyPlot.setRenderer(0, lineRenderer1);
+
+		
 		ChartPanel cp = new ChartPanel(chart);
 		stack.add(cp);
 	}

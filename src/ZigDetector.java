@@ -3,7 +3,6 @@
  *A project to determine the Linear regression for maritime analytic using java
  * Modules such as apache commons maths libraries and Jfreechart are used for analysis and visualization
  */
-import java.awt.FlowLayout;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.util.ArrayList;
@@ -31,7 +30,7 @@ public class ZigDetector {
 	
 	public static void main(String[] args) throws Exception {
 		
-		final String SCENARIO = "Scen1";
+		final String SCENARIO = "Scen2";
 		
 		Track ownshipTrack = new Track("data/" + SCENARIO +"_Ownship.csv");
 		Track targetTrack = new Track("data/" + SCENARIO +"_Target.csv");
@@ -105,6 +104,9 @@ public class ZigDetector {
 			int startIndex = 1 + BUFFER_REGION / 2;
 			int endIndex = thisLegSize -1 - BUFFER_REGION / 2;
 			
+			TimeSeries straightBar = new TimeSeries("Whole " + thisLeg.getName(), FixedMillisecond.class);
+			legResults.addSeries(straightBar);
+			
 			TimeSeries thisSeries = new TimeSeries(thisLeg.getName(), FixedMillisecond.class);
 			legResults.addSeries(thisSeries);
 						
@@ -146,6 +148,7 @@ public class ZigDetector {
 		        double sum = beforeOptimiser.getValue() + afterOptimiser.getValue();
 		        
 		        thisSeries.add(new FixedMillisecond(times.get(index)), sum);
+				straightBar.add(new FixedMillisecond(times.get(index)),  wholeLegOptimiser.getValue());
 		        	        
 		        // is this better?
 		        if(sum < bestScore)
@@ -164,7 +167,7 @@ public class ZigDetector {
 		Plotting.addLegResults(stack, legResults);
 
 		
-		frame.setSize(400, 800);
+		frame.setSize(600, 800);
 		frame.pack();
 
 		
@@ -191,7 +194,7 @@ public class ZigDetector {
 		long lastTime = 0;
 		
 		List<LegOfData> legs = new ArrayList<LegOfData>();
-		legs.add(new LegOfData("Ownship Leg 0"));
+		legs.add(new LegOfData("Leg-1"));
 		
 		long[] times = track.getDates();
 		double[] speeds = track.getSpeeds();
@@ -221,7 +224,7 @@ public class ZigDetector {
 					// we may be in a turn. create a new leg, if we haven't done so already
 					if(legs.get(legs.size()-1).size() != 0)
 					{
-						legs.add(new LegOfData("Ownship Leg " + legs.size()));
+						legs.add(new LegOfData("Leg-" + (legs.size()+1)));
 					}
 				}
 			}
