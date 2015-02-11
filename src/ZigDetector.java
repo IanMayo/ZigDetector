@@ -3,10 +3,17 @@
  *A project to determine the Linear regression for maritime analytic using java
  * Modules such as apache commons maths libraries and Jfreechart are used for analysis and visualization
  */
+import java.awt.FlowLayout;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
+
+import javax.swing.JButton;
+import javax.swing.JFrame;
+import javax.swing.JPanel;
 
 import org.apache.commons.math3.analysis.MultivariateFunction;
 import org.apache.commons.math3.optim.InitialGuess;
@@ -16,18 +23,45 @@ import org.apache.commons.math3.optim.nonlinear.scalar.GoalType;
 import org.apache.commons.math3.optim.nonlinear.scalar.ObjectiveFunction;
 import org.apache.commons.math3.optim.nonlinear.scalar.noderiv.MultiDirectionalSimplex;
 import org.apache.commons.math3.optim.nonlinear.scalar.noderiv.SimplexOptimizer;
+import org.jfree.ui.ApplicationFrame;
 
 public class ZigDetector {
 	
 	public static void main(String[] args) throws Exception {
 		
-		Track ownshipTrack = new Track("data/Scen1_Ownship.csv");
+		final String SCENARIO = "Scen1";
+		
+		Track ownshipTrack = new Track("data/" + SCENARIO +"_Ownship.csv");
 		@SuppressWarnings("unused")
-		Track targetTrack = new Track("data/Scen1_Target.csv");
-		Sensor sensor = new Sensor("data/Scen1_Sensor.csv");
+		Track targetTrack = new Track("data/" + SCENARIO +"_Target.csv");
+		Sensor sensor = new Sensor("data/" + SCENARIO +"_Sensor.csv");
+		
+		// create a holder for the data
+		JFrame frame = new JFrame("Results");
+		frame.setSize(400, 800);
+		JPanel stack = new JPanel();
+		stack.setLayout(new FlowLayout());
+		frame.add(stack);
+		frame.pack();
+		frame.setVisible(true);
+		frame.addWindowListener(new WindowAdapter()
+        {
+            @Override
+            public void windowClosing(WindowEvent e)
+            {
+                System.out.println("Closed");
+                e.getWindow().dispose();
+            }
+        });
+
 		
 		// Now, we have to slice the data into ownship legs
 		List<LegOfData> ownshipLegs = calculateLegs(ownshipTrack);
+		
+		// ok, time for the first plot
+		Plotting.addOwnshipData(stack, ownshipTrack);
+		
+		frame.pack();
 		
 		long startTime = System.currentTimeMillis();
 		
@@ -57,6 +91,9 @@ public class ZigDetector {
 	                new MultiDirectionalSimplex(3)); 
 
 			System.out.println(" whole leg score:" + wholeLegOptimiser.getValue().intValue());
+			double[] key = wholeLegOptimiser.getKey();
+			System.out.println("B:" + key[0] + " P:" + key[1] + " Q:" + key[2]);
+			
 			
 			double bestScore = Double.MAX_VALUE;
 			int bestIndex = -1;
@@ -88,6 +125,7 @@ public class ZigDetector {
 	    		    		
 		        SimplexOptimizer optimizerMult = new SimplexOptimizer(1e-3, 1e-6); 
 		        
+		        // fit a curve to the period before the turn
 				PointValuePair beforeOptimiser = optimizerMult.optimize( 
 		                new MaxEval(MAX_ITERATIONS),
 		                new ObjectiveFunction(beforeF), 
@@ -95,6 +133,7 @@ public class ZigDetector {
 		                new InitialGuess(new double[] {beforeBearings.get(0), 1, 1} ),//beforeBearings.get(0)
 		                new MultiDirectionalSimplex(3)); 
 		        
+				// fit a curve to the period after the turn
 		        PointValuePair afterOptimiser = optimizerMult.optimize( 
 		                new MaxEval(MAX_ITERATIONS),
 		                new ObjectiveFunction(afterF), 
@@ -102,10 +141,13 @@ public class ZigDetector {
 		                new InitialGuess(new double[] {afterBearings.get(0), 1, 1} ),//afterBearings.get(0)
 		                new MultiDirectionalSimplex(3)); 
 
+		        // find the total error sum
 		        double sum = beforeOptimiser.getValue() + afterOptimiser.getValue();
-		        
+		        	        
+		        // is this better?
 		        if(sum < bestScore)
 		        {
+		        	// yes - store it.
 		        	bestScore = sum;
 		        	bestIndex = index;
 		        }
@@ -261,7 +303,8 @@ public class ZigDetector {
 
 		private double calcForecast(double B, double P, double Q,
 				Double elapsedSecs) {
-			return Math.toDegrees(Math.atan2(Math.sin(Math.toRadians(B))+P*elapsedSecs,Math.cos(Math.toRadians(B))+Q*elapsedSecs));
+//			return Math.toDegrees(Math.atan2(Math.sin(Math.toRadians(B))+P*elapsedSecs,Math.cos(Math.toRadians(B))+Q*elapsedSecs));
+			return Math.toDegrees(Math.atan2(Math.cos(Math.toRadians(B))+Q*elapsedSecs, Math.sin(Math.toRadians(B))+P*elapsedSecs));
 		}		
 	}
 }
