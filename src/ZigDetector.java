@@ -64,7 +64,12 @@ public class ZigDetector {
 			// make the two slices				
 			final int BUFFER_REGION = 4; // the number of measurements to ignore whilst the target is turning 
 
-			for(int index=1 + BUFFER_REGION / 2;index<thisLeg.size() - BUFFER_REGION / 2;index++)
+			// how many points in this leg?
+			int thisLegSize = times.size();
+			int startIndex = 1 + BUFFER_REGION / 2;
+			int endIndex = thisLegSize -1 - BUFFER_REGION / 2;
+			
+			for(int index=startIndex;index<endIndex;index++)
 			{
 				List<Long> theseTimes = times;
 				List<Double> theseBearings = bearings;				
@@ -106,7 +111,7 @@ public class ZigDetector {
 		        }
 			}			
 			
-	        System.out.println(" split sum:" + (int)bestScore + " at time " + times.get(bestIndex));
+	        System.out.println(" split sum:" + (int)bestScore + " at time " + new Date(times.get(bestIndex)));
 	        
 		}
 		
@@ -151,8 +156,6 @@ public class ZigDetector {
 				double timeStepSecs = (thisTime - lastTime)/1000;
 				double courseRate = Math.abs(thisCourse - lastCourse) / timeStepSecs; 
 				double speedRate = Math.abs(thisSpeed - lastSpeed) / timeStepSecs;
-				
-				System.out.println("course:" + courseRate + " speed:" + speedRate);
 				
 				// are they out of range
 				if((courseRate < COURSE_TOLERANCE) && (speedRate < SPEED_TOLERANCE))
@@ -250,7 +253,9 @@ public class ZigDetector {
 				double thisError = Math.pow(thisForecast - thisMeasured, 2);
 				runningSum += thisError;
 			}        	
-        		
+
+        //	System.out.println("B:" + (int)B + " P:" + (int)P + " Q:" + (int)Q + " sum:" + runningSum);
+        	
             return runningSum;
 		}
 
