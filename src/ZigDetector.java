@@ -38,9 +38,6 @@ public class ZigDetector {
 		
 		// create a holder for the data
 		JFrame frame = new JFrame("Results");
-		JPanel stack = new JPanel();
-		stack.setLayout(new BoxLayout(stack, BoxLayout.Y_AXIS));
-		frame.add(stack);
 		frame.pack();
 		frame.setVisible(true);
 		frame.addWindowListener(new WindowAdapter()
@@ -52,6 +49,10 @@ public class ZigDetector {
                 e.getWindow().dispose();
             }
         });
+		
+		JPanel stack = new JPanel();
+		stack.setLayout(new BoxLayout(stack, BoxLayout.Y_AXIS));
+		frame.add(stack);
 
 		// Now, we have to slice the data into ownship legs
 		List<LegOfData> ownshipLegs = calculateLegs(ownshipTrack);
