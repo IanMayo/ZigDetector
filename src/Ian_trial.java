@@ -15,13 +15,13 @@ import org.apache.commons.math3.optim.nonlinear.scalar.GoalType;
 import org.apache.commons.math3.optim.nonlinear.scalar.ObjectiveFunction;
 import org.apache.commons.math3.optim.nonlinear.scalar.noderiv.MultiDirectionalSimplex;
 import org.apache.commons.math3.optim.nonlinear.scalar.noderiv.SimplexOptimizer;
-import org.joda.time.DateTime;
 
 public class Ian_trial {
 	
 	public static void main(String[] args) throws Exception {
 		
 		Track ownshipTrack = new Track("data/Scen1_Ownship.csv");
+		@SuppressWarnings("unused")
 		Track targetTrack = new Track("data/Scen1_Target.csv");
 		Sensor sensor = new Sensor("data/Scen1_Sensor.csv");
 		
@@ -56,7 +56,6 @@ public class Ian_trial {
 	                new MultiDirectionalSimplex(3)); 
 
 			System.out.println(" whole leg score:" + wholeLegOptimiser.getValue().intValue());
-			
 			
 			double bestScore = Double.MAX_VALUE;
 			int bestIndex = -1;
@@ -135,12 +134,12 @@ public class Ian_trial {
 		List<LegOfData> legs = new ArrayList<LegOfData>();
 		legs.add(new LegOfData("Ownship Leg 0"));
 		
-		DateTime[] times = track.getDates();
+		long[] times = track.getDates();
 		double[] speeds = track.getSpeeds();
 		double[] courses = track.getCourses();
 		
 		for (int i = 0; i < times.length; i++) {
-			long thisTime = times[i].getMillis();
+			long thisTime = times[i];
 			
 			double thisSpeed = speeds[i];
 			double thisCourse = courses[i];

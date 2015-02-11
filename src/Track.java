@@ -2,7 +2,6 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.List;
 
-import org.joda.time.DateTime;
 import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.DateTimeFormatter;
 
@@ -10,13 +9,13 @@ import au.com.bytecode.opencsv.CSVReader;
 
 public class Track {
 
-	final private org.joda.time.DateTime[] dates;
+	final private long[] dates;
 	final private double[] x;
 	final private double[] y;
 	final private double[] courses;
 	final private double[] speeds;
 
-	public org.joda.time.DateTime[] getDates() {
+	public long[] getDates() {
 		return dates;
 	}
 
@@ -67,13 +66,13 @@ public class Track {
 			y = new double[content.size()];
 			speeds = new double[content.size()];
 			courses = new double[content.size()];
-			dates = new DateTime[content.size()];
+			dates = new long[content.size()];
 
 			for (Object object : content) {
 				row = (String[]) object;
 				/* parsing data from the list to the variables */
 				String thisDate = row[0].toString();
-				dates[counter] = formatter.parseDateTime(thisDate);
+				dates[counter] = formatter.parseDateTime(thisDate).getMillis();
 				x[counter] = (Double.parseDouble(row[1].toString()));
 				y[counter] = (Double.parseDouble(row[2].toString()));
 				courses[counter] = (Double.parseDouble(row[4].toString()));
