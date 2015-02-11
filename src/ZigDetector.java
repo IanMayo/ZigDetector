@@ -4,6 +4,7 @@
  * Modules such as apache commons maths libraries and Jfreechart are used for analysis and visualization
  */
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 
@@ -16,7 +17,7 @@ import org.apache.commons.math3.optim.nonlinear.scalar.ObjectiveFunction;
 import org.apache.commons.math3.optim.nonlinear.scalar.noderiv.MultiDirectionalSimplex;
 import org.apache.commons.math3.optim.nonlinear.scalar.noderiv.SimplexOptimizer;
 
-public class Ian_trial {
+public class ZigDetector {
 	
 	public static void main(String[] args) throws Exception {
 		
@@ -129,7 +130,7 @@ public class Ian_trial {
 		
 		double lastCourse = 0;
 		double lastSpeed = 0;
-		double lastTime = 0;
+		long lastTime = 0;
 		
 		List<LegOfData> legs = new ArrayList<LegOfData>();
 		legs.add(new LegOfData("Ownship Leg 0"));
@@ -147,9 +148,11 @@ public class Ian_trial {
 			if(i > 0)
 			{
 				// ok, check out the course change rate
-				double timeStep = thisTime - lastTime;
-				double courseRate = Math.abs(thisCourse - lastCourse) / timeStep; 
-				double speedRate = Math.abs(thisSpeed - lastSpeed) / timeStep;
+				double timeStepSecs = (thisTime - lastTime)/1000;
+				double courseRate = Math.abs(thisCourse - lastCourse) / timeStepSecs; 
+				double speedRate = Math.abs(thisSpeed - lastSpeed) / timeStepSecs;
+				
+				System.out.println("course:" + courseRate + " speed:" + speedRate);
 				
 				// are they out of range
 				if((courseRate < COURSE_TOLERANCE) && (speedRate < SPEED_TOLERANCE))
@@ -212,7 +215,7 @@ public class Ian_trial {
 		@Override
 		public String toString()
 		{
-			return getName() + " " + _times.get(0) + "-" + _times.get(_times.size()-1);
+			return getName() + " " + new Date(_times.get(0)) + "-" + new Date(_times.get(_times.size()-1));
 		}
 		
 	}
