@@ -142,6 +142,11 @@ public class ZigDetector {
 		ChartPanel cp = new ChartPanel(new JFreeChart("Results for " + SCENARIO,
                 JFreeChart.DEFAULT_TITLE_FONT, combinedPlot, true)){
 
+					/**
+					 * 
+					 */
+					private static final long serialVersionUID = 1L;
+
 					@Override
 					@Transient
 					public Dimension getPreferredSize() {

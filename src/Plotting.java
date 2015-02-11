@@ -56,14 +56,12 @@ public class Plotting {
 		dataset2.addSeries(data2);
 
 		final JFreeChart chart = ChartFactory.createTimeSeriesChart(title, // String
-																			// title,
 				"Time", // String timeAxisLabel
 				title + "Course", // String valueAxisLabel,
 				dataset1, // XYDataset dataset,
 				true, // include legend
 				true, // tooltips
-				false // urls
-				);
+				false); // urls 
 
 		XYPlot xyPlot = (XYPlot) chart.getPlot();
 		xyPlot.setDomainCrosshairVisible(true);
@@ -105,24 +103,23 @@ public class Plotting {
 		
 		// let's try the shading
 		if (valueMarkers != null) {
-			plotMarkers(valueMarkers, xyPlot);
+			plotMarkers(xyPlot, valueMarkers);
 		}
 		
 		parent.add(xyPlot);
 	}
 
-	public static void addLegResults( CombinedDomainXYPlot parent, TimeSeriesCollection dataset1, List<Long> valueMarkers) {
+	public static void addLegResults( CombinedDomainXYPlot parent, TimeSeriesCollection errorValues, List<Long> valueMarkers) {
 
 		final JFreeChart chart = ChartFactory.createTimeSeriesChart(
 				"Leg Results", // String
 								// title,
 				"Time", // String timeAxisLabel
 				"Errpr", // String valueAxisLabel,
-				dataset1, // XYDataset dataset,
+				errorValues, // XYDataset dataset,
 				true, // include legend
 				true, // tooltips
-				false // urls
-				);
+				false); // urls
 
 		XYPlot xyPlot = (XYPlot) chart.getPlot();
 		xyPlot.setDomainCrosshairVisible(true);
@@ -139,18 +136,18 @@ public class Plotting {
 		
 		// let's try the shading
 		if (valueMarkers != null) {
-			plotMarkers(valueMarkers, xyPlot);
+			plotMarkers(xyPlot, valueMarkers);
 		}
 		
 		
 		parent.add(xyPlot);
 	}
 
-	/**
-	 * @param valueMarkers
+	/**  Plot a series of vertical markers
 	 * @param xyPlot
+	 * @param valueMarkers
 	 */
-	private static void plotMarkers(List<Long> valueMarkers, XYPlot xyPlot) {
+	private static void plotMarkers(XYPlot xyPlot, List<Long> valueMarkers) {
 		Iterator<Long> iter = valueMarkers.iterator();
 		while (iter.hasNext()) {
 			Long leg = (Long) iter.next();
