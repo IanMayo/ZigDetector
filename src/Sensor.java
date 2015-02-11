@@ -3,7 +3,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.joda.time.DateTime;
 import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.DateTimeFormatter;
 
@@ -17,10 +16,7 @@ public class Sensor {
 	public Sensor(final String path) throws IOException {
 
 		DateTimeFormatter formatter = DateTimeFormat
-				.forPattern("dd/MM/yyyy HH:mm:ss");
-
-		// Filename containing the data
-		String csvFilename = "data/ArcTan_Data.csv";
+				.forPattern("yyMMdd HHmmss");
 
 		// schema
 		// 100112 120000,12000.00 ,24000.00 ,0.00 ,-153.43 
@@ -30,7 +26,7 @@ public class Sensor {
 		CSVReader csvReader = null;
 
 		try {
-			csvReader = new CSVReader(new FileReader(csvFilename), ',', '\'', 3);
+			csvReader = new CSVReader(new FileReader(path), ',', '\'', 3);
 			final List<String[]> content = csvReader.readAll();
 			// variable to hold each row of the List while iterating through it
 			String[] row = null;
