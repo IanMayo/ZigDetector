@@ -30,7 +30,7 @@ public class ZigDetector {
 	
 	public static void main(String[] args) throws Exception {
 		
-		final String SCENARIO = "Scen2";
+		final String SCENARIO = "Scen1";
 		
 		Track ownshipTrack = new Track("data/" + SCENARIO +"_Ownship.csv");
 		Track targetTrack = new Track("data/" + SCENARIO +"_Target.csv");
