@@ -1,21 +1,19 @@
 import java.awt.BasicStroke;
 import java.awt.Color;
-import java.awt.Dimension;
 import java.awt.Font;
 import java.text.SimpleDateFormat;
 import java.util.Iterator;
 import java.util.List;
 
-import javax.swing.JPanel;
-
 import org.jfree.chart.ChartFactory;
-import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
 import org.jfree.chart.axis.DateAxis;
 import org.jfree.chart.axis.LogarithmicAxis;
 import org.jfree.chart.axis.NumberAxis;
+import org.jfree.chart.plot.CombinedDomainXYPlot;
 import org.jfree.chart.plot.IntervalMarker;
 import org.jfree.chart.plot.Marker;
+import org.jfree.chart.plot.ValueMarker;
 import org.jfree.chart.plot.XYPlot;
 import org.jfree.chart.renderer.xy.XYLineAndShapeRenderer;
 import org.jfree.data.time.FixedMillisecond;
@@ -27,14 +25,23 @@ import org.jfree.ui.TextAnchor;
 
 public class Plotting {
 
-	public static void addOwnshipData(JPanel stack, String title,
-			Track ownshipTrack, List<LegOfData> ownshipLegs) {
+	public static CombinedDomainXYPlot createPlot()
+	{
+		final CombinedDomainXYPlot plot = new CombinedDomainXYPlot(new DateAxis("Domain"));
+        plot.setGap(10.0);
+		final DateAxis axis = (DateAxis) plot.getDomainAxis();
+		axis.setDateFormatOverride(new SimpleDateFormat("hh:mm:ss"));
+        return plot;
+	}
+	
+	public static void addOwnshipData( CombinedDomainXYPlot parent, String title,
+			Track ownshipTrack, List<LegOfData> ownshipLegs, List<Long> valueMarkers) {
 
 		TimeSeriesCollection dataset1 = new TimeSeriesCollection();
 		TimeSeriesCollection dataset2 = new TimeSeriesCollection();
 
-		TimeSeries data1 = new TimeSeries("Course", FixedMillisecond.class);
-		TimeSeries data2 = new TimeSeries("Speed", FixedMillisecond.class);
+		TimeSeries data1 = new TimeSeries(title + "Course", FixedMillisecond.class);
+		TimeSeries data2 = new TimeSeries(title + "Speed", FixedMillisecond.class);
 
 		double[] courses = ownshipTrack.getCourses();
 		double[] speeds = ownshipTrack.getSpeeds();
@@ -51,7 +58,7 @@ public class Plotting {
 		final JFreeChart chart = ChartFactory.createTimeSeriesChart(title, // String
 																			// title,
 				"Time", // String timeAxisLabel
-				"Course", // String valueAxisLabel,
+				title + "Course", // String valueAxisLabel,
 				dataset1, // XYDataset dataset,
 				true, // include legend
 				true, // tooltips
@@ -64,7 +71,7 @@ public class Plotting {
 		final DateAxis axis = (DateAxis) xyPlot.getDomainAxis();
 		axis.setDateFormatOverride(new SimpleDateFormat("hh:mm:ss"));
 
-		final NumberAxis axis2 = new NumberAxis("Speed");
+		final NumberAxis axis2 = new NumberAxis(title + "Speed");
 		xyPlot.setRangeAxis(1, axis2);
 		xyPlot.setDataset(1, dataset2);
 		xyPlot.mapDatasetToRangeAxis(1, 1);
@@ -95,22 +102,16 @@ public class Plotting {
 				xyPlot.addDomainMarker(bst, Layer.BACKGROUND);
 			}
 		}
-
-		ChartPanel cp = new ChartPanel(chart){
-			/**
-			 * 
-			 */
-			private static final long serialVersionUID = 1L;
-
-			@Override
-			public Dimension getPreferredSize() {
-			    return new Dimension(500, 200);
-			}
-		};
-		stack.add(cp);
+		
+		// let's try the shading
+		if (valueMarkers != null) {
+			plotMarkers(valueMarkers, xyPlot);
+		}
+		
+		parent.add(xyPlot);
 	}
 
-	public static void addLegResults(JPanel stack, TimeSeriesCollection dataset1) {
+	public static void addLegResults( CombinedDomainXYPlot parent, TimeSeriesCollection dataset1, List<Long> valueMarkers) {
 
 		final JFreeChart chart = ChartFactory.createTimeSeriesChart(
 				"Leg Results", // String
@@ -135,9 +136,32 @@ public class Plotting {
 		XYLineAndShapeRenderer lineRenderer1 = new XYLineAndShapeRenderer(true,
 				true);
 		xyPlot.setRenderer(0, lineRenderer1);
-
 		
-		ChartPanel cp = new ChartPanel(chart);
-		stack.add(cp);
+		// let's try the shading
+		if (valueMarkers != null) {
+			plotMarkers(valueMarkers, xyPlot);
+		}
+		
+		
+		parent.add(xyPlot);
+	}
+
+	/**
+	 * @param valueMarkers
+	 * @param xyPlot
+	 */
+	private static void plotMarkers(List<Long> valueMarkers, XYPlot xyPlot) {
+		Iterator<Long> iter = valueMarkers.iterator();
+		while (iter.hasNext()) {
+			Long leg = (Long) iter.next();
+			final Marker bst = new ValueMarker(leg,
+					Color.gray, new BasicStroke(3.0f), null, null,
+					1.0f);
+			bst.setLabelAnchor(RectangleAnchor.BOTTOM_RIGHT);
+			bst.setLabelFont(new Font("SansSerif", Font.ITALIC + Font.BOLD,
+					10));
+			bst.setLabelTextAnchor(TextAnchor.BASELINE_RIGHT);
+			xyPlot.addDomainMarker(bst, Layer.BACKGROUND);
+		}
 	}
 }

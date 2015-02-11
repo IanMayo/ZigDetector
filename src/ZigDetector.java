@@ -3,16 +3,15 @@
  *A project to determine the Linear regression for maritime analytic using java
  * Modules such as apache commons maths libraries and Jfreechart are used for analysis and visualization
  */
+import java.awt.Dimension;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.beans.Transient;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 
-import javax.swing.BoxLayout;
 import javax.swing.JFrame;
-import javax.swing.JPanel;
 
 import org.apache.commons.math3.analysis.MultivariateFunction;
 import org.apache.commons.math3.optim.InitialGuess;
@@ -22,6 +21,9 @@ import org.apache.commons.math3.optim.nonlinear.scalar.GoalType;
 import org.apache.commons.math3.optim.nonlinear.scalar.ObjectiveFunction;
 import org.apache.commons.math3.optim.nonlinear.scalar.noderiv.MultiDirectionalSimplex;
 import org.apache.commons.math3.optim.nonlinear.scalar.noderiv.SimplexOptimizer;
+import org.jfree.chart.ChartPanel;
+import org.jfree.chart.JFreeChart;
+import org.jfree.chart.plot.CombinedDomainXYPlot;
 import org.jfree.data.time.FixedMillisecond;
 import org.jfree.data.time.TimeSeries;
 import org.jfree.data.time.TimeSeriesCollection;
@@ -30,13 +32,134 @@ public class ZigDetector {
 	
 	public static void main(String[] args) throws Exception {
 		
+		// declare which scenario we're running
 		final String SCENARIO = "Scen1";
 		
+		// load the data
 		Track ownshipTrack = new Track("data/" + SCENARIO +"_Ownship.csv");
 		Track targetTrack = new Track("data/" + SCENARIO +"_Target.csv");
 		Sensor sensor = new Sensor("data/" + SCENARIO +"_Sensor.csv");
 		
 		// create a holder for the data
+		final JFrame frame = createFrame();
+
+		// Now, we have to slice the data into ownship legs
+		List<LegOfData> ownshipLegs = calculateLegs(ownshipTrack);
+		
+		// create the combined plot - where we show all our data
+		CombinedDomainXYPlot combinedPlot = Plotting.createPlot();
+		
+		// ok create the plots of ownship & target tracks
+		Plotting.addOwnshipData(combinedPlot, "O/S", ownshipTrack, ownshipLegs, null);
+		
+		// capture the start time (used for time elapsed at the end)
+		long startTime = System.currentTimeMillis();
+		
+		// get ready to store the results runs
+		TimeSeriesCollection legResults = new TimeSeriesCollection();
+		
+		List<Long> valueMarkers = new ArrayList<Long>();
+		
+		// ok, work through the legs.  In the absence of a Discrete Optimisation algorithm we're taking a brue force approach.
+		// Hopefully Craig can find an optimised alternative to this.
+		for (Iterator<LegOfData> iterator = ownshipLegs.iterator(); iterator.hasNext();) {
+			
+			LegOfData thisLeg = (LegOfData) iterator.next();
+			
+			// ok, slice the data for this leg
+			List<Double> bearings = sensor.extractBearings(thisLeg.getStart(), thisLeg.getEnd());
+			List<Long> times = sensor.extractTimes(thisLeg.getStart(), thisLeg.getEnd());
+			
+			// find the error score for the overall leg
+	        MultivariateFunction wholeLeg = new ArcTanSolver(times, bearings);
+	        
+	        // 
+	        SimplexOptimizer wholeOptimizer = new SimplexOptimizer(1e-3, 1e-6); 
+	        
+	        //
+	        int MAX_ITERATIONS = Integer.MAX_VALUE;
+	        
+	        // calculate the overall score for this leg
+			PointValuePair wholeLegOptimiser = wholeOptimizer.optimize( 
+	                new MaxEval(MAX_ITERATIONS),
+	                new ObjectiveFunction(wholeLeg), 
+	                GoalType.MINIMIZE,
+	                new InitialGuess(new double[] {bearings.get(0), 1, 1} ),//beforeBearings.get(0)
+	                new MultiDirectionalSimplex(3)); 
+
+			// look at the individual scores (though they're not of interest)
+//			double[] key = wholeLegOptimiser.getKey();
+//			System.out.println("B:" + key[0] + " P:" + key[1] + " Q:" + key[2]);
+	
+			// we will try to beat this score, so set as very high number
+			double bestScore = Double.MAX_VALUE;
+			int bestIndex = -1;
+
+			final int BUFFER_REGION = 4; // the number of measurements to ignore whilst the target is turning 
+
+			// how many points in this leg?
+			int thisLegSize = times.size();
+			int startIndex = 1 + BUFFER_REGION / 2;
+			int endIndex = thisLegSize -1 - BUFFER_REGION / 2;
+
+			// create a placeholder for the overall score for this leg
+			TimeSeries straightBar = new TimeSeries("Whole " + thisLeg.getName(), FixedMillisecond.class);
+			legResults.addSeries(straightBar);
+			
+			// create a placeholder for the individual time slice experiments
+			TimeSeries thisSeries = new TimeSeries(thisLeg.getName(), FixedMillisecond.class);
+			legResults.addSeries(thisSeries);
+						
+			// loop through the values in this leg
+			// NOTE: this is a brute force algorithm - maybe we can find a Discrete Optimisation equivalent
+			for(int index=startIndex;index<endIndex;index++)
+			{
+				// what's the total score for slicing at this index?
+				double sum = sliceLeg(index, bearings, times, MAX_ITERATIONS,
+						wholeLegOptimiser.getValue(), BUFFER_REGION, straightBar,
+						thisSeries);
+		        	        
+		        // is this better?
+		        if(sum < bestScore)
+		        {
+		        	// yes - store it.
+		        	bestScore = sum;
+		        	bestIndex = index;
+		        }
+			}			
+			
+			valueMarkers.add(times.get(bestIndex));
+			
+		}
+		
+		// ok, also plot the leg attempts
+		Plotting.addLegResults(combinedPlot, legResults, valueMarkers);
+		
+		// show the target track (it contains the results)
+		Plotting.addOwnshipData(combinedPlot, "Tgt ", targetTrack, null, valueMarkers);
+
+		// wrap the combined chart 
+		ChartPanel cp = new ChartPanel(new JFreeChart("Results for " + SCENARIO,
+                JFreeChart.DEFAULT_TITLE_FONT, combinedPlot, true)){
+
+					@Override
+					@Transient
+					public Dimension getPreferredSize() {
+						return new Dimension(1000,800);
+					}
+			
+		};
+		frame.add(cp);		
+		frame.pack();
+		
+		long elapsed = System.currentTimeMillis() - startTime;
+		System.out.println("Elapsed:" + elapsed / 1000 + " secs");
+	}
+
+	/**
+	 * @return a frame to contain the results
+	 */
+	private static JFrame createFrame() {
 		JFrame frame = new JFrame("Results");
 		frame.pack();
 		frame.setVisible(true);
@@ -49,132 +172,63 @@ public class ZigDetector {
                 e.getWindow().dispose();
             }
         });
-		
-		JPanel stack = new JPanel();
-		stack.setLayout(new BoxLayout(stack, BoxLayout.Y_AXIS));
-		frame.add(stack);
 
-		// Now, we have to slice the data into ownship legs
-		List<LegOfData> ownshipLegs = calculateLegs(ownshipTrack);
-		
-		// ok, time for the first plot
-		Plotting.addOwnshipData(stack, "Ownship", ownshipTrack, ownshipLegs);
-		Plotting.addOwnshipData(stack, "Target", targetTrack, null);
-		
-		long startTime = System.currentTimeMillis();
-		
-		TimeSeriesCollection legResults = new TimeSeriesCollection();
-		
-		// ok, work through the legs.  In the absence of a Discrete Optimisation algorithm we're taking a brue force approach.
-		// Hopefully Craig can find an optimised alternative to this.
-		for (Iterator<LegOfData> iterator = ownshipLegs.iterator(); iterator.hasNext();) {
-			
-			LegOfData thisLeg = (LegOfData) iterator.next();
-			
-			System.out.println(" handling leg:" + thisLeg);
-			
-			// ok, extract the relevant data
-			List<Double> bearings = sensor.extractBearings(thisLeg.getStart(), thisLeg.getEnd());
-			List<Long> times = sensor.extractTimes(thisLeg.getStart(), thisLeg.getEnd());
-			
-			// find the error score for the overall leg
-	        MultivariateFunction wholeLeg = new ArcTanSolver(times, bearings); 
-	        SimplexOptimizer wholeOptimizer = new SimplexOptimizer(1e-3, 1e-6); 
-	        
-	        int MAX_ITERATIONS = Integer.MAX_VALUE;
-	        
-			PointValuePair wholeLegOptimiser = wholeOptimizer.optimize( 
-	                new MaxEval(MAX_ITERATIONS),
-	                new ObjectiveFunction(wholeLeg), 
-	                GoalType.MINIMIZE,
-	                new InitialGuess(new double[] {bearings.get(0), 1, 1} ),//beforeBearings.get(0)
-	                new MultiDirectionalSimplex(3)); 
+		return frame;
+	}
 
-			System.out.println(" whole leg score:" + wholeLegOptimiser.getValue().intValue());
-			double[] key = wholeLegOptimiser.getKey();
-			System.out.println("B:" + key[0] + " P:" + key[1] + " Q:" + key[2]);
-			
-			double bestScore = Double.MAX_VALUE;
-			int bestIndex = -1;
-
-			// make the two slices				
-			final int BUFFER_REGION = 4; // the number of measurements to ignore whilst the target is turning 
-
-			// how many points in this leg?
-			int thisLegSize = times.size();
-			int startIndex = 1 + BUFFER_REGION / 2;
-			int endIndex = thisLegSize -1 - BUFFER_REGION / 2;
-			
-			TimeSeries straightBar = new TimeSeries("Whole " + thisLeg.getName(), FixedMillisecond.class);
-			legResults.addSeries(straightBar);
-			
-			TimeSeries thisSeries = new TimeSeries(thisLeg.getName(), FixedMillisecond.class);
-			legResults.addSeries(thisSeries);
-						
-			for(int index=startIndex;index<endIndex;index++)
-			{
-				List<Long> theseTimes = times;
-				List<Double> theseBearings = bearings;				
-				
-				// first the times
-				List<Long> beforeTimes = theseTimes.subList(0, index - BUFFER_REGION / 2);
-				List<Long> afterTimes = theseTimes.subList(index + BUFFER_REGION / 2, theseTimes.size()-1);
-				
-				// now the bearings
-				List<Double> beforeBearings = theseBearings.subList(0, index);
-				List<Double> afterBearings = theseBearings.subList(index, theseBearings.size()-1);
-				
-		        MultivariateFunction beforeF = new ArcTanSolver(beforeTimes, beforeBearings); 
-		        MultivariateFunction afterF = new ArcTanSolver(afterTimes, afterBearings); 
-	    		    		
-		        SimplexOptimizer optimizerMult = new SimplexOptimizer(1e-3, 1e-6); 
-		        
-		        // fit a curve to the period before the turn
-				PointValuePair beforeOptimiser = optimizerMult.optimize( 
-		                new MaxEval(MAX_ITERATIONS),
-		                new ObjectiveFunction(beforeF), 
-		                GoalType.MINIMIZE,
-		                new InitialGuess(new double[] {beforeBearings.get(0), 1, 1} ),//beforeBearings.get(0)
-		                new MultiDirectionalSimplex(3)); 
-		        
-				// fit a curve to the period after the turn
-		        PointValuePair afterOptimiser = optimizerMult.optimize( 
-		                new MaxEval(MAX_ITERATIONS),
-		                new ObjectiveFunction(afterF), 
-		                GoalType.MINIMIZE,
-		                new InitialGuess(new double[] {afterBearings.get(0), 1, 1} ),//afterBearings.get(0)
-		                new MultiDirectionalSimplex(3)); 
-
-		        // find the total error sum
-		        double sum = beforeOptimiser.getValue() + afterOptimiser.getValue();
-		        
-		        thisSeries.add(new FixedMillisecond(times.get(index)), sum);
-				straightBar.add(new FixedMillisecond(times.get(index)),  wholeLegOptimiser.getValue());
-		        	        
-		        // is this better?
-		        if(sum < bestScore)
-		        {
-		        	// yes - store it.
-		        	bestScore = sum;
-		        	bestIndex = index;
-		        }
-			}			
-			
-	        System.out.println(" split sum:" + (int)bestScore + " at time " + new Date(times.get(bestIndex)));
-	        
-		}
+	/**
+	 * @param trialIndex
+	 * @param bearings
+	 * @param times
+	 * @param MAX_ITERATIONS
+	 * @param overallScore the overall score for this leg
+	 * @param BUFFER_REGION
+	 * @param straightBar
+	 * @param thisSeries
+	 * @return
+	 */
+	private static double sliceLeg(int trialIndex, List<Double> bearings,
+			List<Long> times, int MAX_ITERATIONS,
+			double overallScore, final int BUFFER_REGION,
+			TimeSeries straightBar, TimeSeries thisSeries) {
+		List<Long> theseTimes = times;
+		List<Double> theseBearings = bearings;				
 		
-		// ok, also plot the leg attempts
-		Plotting.addLegResults(stack, legResults);
-
+		// first the times
+		List<Long> beforeTimes = theseTimes.subList(0, trialIndex - BUFFER_REGION / 2);
+		List<Long> afterTimes = theseTimes.subList(trialIndex + BUFFER_REGION / 2, theseTimes.size()-1);
 		
-		frame.setSize(600, 800);
-		frame.pack();
-
+		// now the bearings
+		List<Double> beforeBearings = theseBearings.subList(0, trialIndex);
+		List<Double> afterBearings = theseBearings.subList(trialIndex, theseBearings.size()-1);
 		
-		long elapsed = System.currentTimeMillis() - startTime;
-		System.out.println("Elapsed:" + elapsed / 1000 + " secs");
+		MultivariateFunction beforeF = new ArcTanSolver(beforeTimes, beforeBearings); 
+		MultivariateFunction afterF = new ArcTanSolver(afterTimes, afterBearings); 
+		    		
+		SimplexOptimizer optimizerMult = new SimplexOptimizer(1e-3, 1e-6); 
+		
+		// fit a curve to the period before the turn
+		PointValuePair beforeOptimiser = optimizerMult.optimize( 
+		        new MaxEval(MAX_ITERATIONS),
+		        new ObjectiveFunction(beforeF), 
+		        GoalType.MINIMIZE,
+		        new InitialGuess(new double[] {beforeBearings.get(0), 1, 1} ),//beforeBearings.get(0)
+		        new MultiDirectionalSimplex(3)); 
+		
+		// fit a curve to the period after the turn
+		PointValuePair afterOptimiser = optimizerMult.optimize( 
+		        new MaxEval(MAX_ITERATIONS),
+		        new ObjectiveFunction(afterF), 
+		        GoalType.MINIMIZE,
+		        new InitialGuess(new double[] {afterBearings.get(0), 1, 1} ),//afterBearings.get(0)
+		        new MultiDirectionalSimplex(3)); 
 
+		// find the total error sum
+		double sum = beforeOptimiser.getValue() + afterOptimiser.getValue();
+		
+		thisSeries.add(new FixedMillisecond(times.get(trialIndex)), sum);
+		straightBar.add(new FixedMillisecond(times.get(trialIndex)),  overallScore);
+		return sum;
 	}
 
 	/** slice this data into ownship legs, where the course and speed are relatively steady
