@@ -1,7 +1,6 @@
 ;; ASSET build:,4-August-2006 13:34
 ;; ASSET Output recorded at:,Wed Feb 11 09:44:40 GMT 2015, name:,Narrowband Tracking Scenario (High_BRate)
 DTG,Track name, x (m), y (m), z (m), course (degs), speed (m/s), dem course (Degs), dem speed (m/s), dem depth (m), fuel, activity
-100112 120000,SENSOR,11000.00 ,24000.00 ,0.00 ,205.00 ,6.17 ,100.00 ,inactive
 100112 120000,SENSOR,11000.00 ,24000.00 ,0.00 ,205.00 ,6.17 ,200.00 ,6.17 ,0.00 ,100.00 ,sensor route:leg one:Heading for target location
 100112 120047,SENSOR,10899.35 ,23727.91 ,0.00 ,200.00 ,6.17 ,200.00 ,6.17 ,0.00 ,100.00 ,sensor route:leg one:Heading for target location
 100112 120134,SENSOR,10800.16 ,23455.25 ,0.00 ,199.99 ,6.17 ,199.99 ,6.17 ,0.00 ,100.00 ,sensor route:leg one:Heading for target location
