@@ -1,5 +1,6 @@
 import java.awt.BasicStroke;
 import java.awt.Color;
+import java.awt.Dimension;
 import java.awt.Font;
 import java.text.SimpleDateFormat;
 import java.util.Iterator;
@@ -11,6 +12,7 @@ import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
 import org.jfree.chart.axis.DateAxis;
+import org.jfree.chart.axis.LogarithmicAxis;
 import org.jfree.chart.axis.NumberAxis;
 import org.jfree.chart.plot.IntervalMarker;
 import org.jfree.chart.plot.Marker;
@@ -25,8 +27,8 @@ import org.jfree.ui.TextAnchor;
 
 public class Plotting {
 
-	public static void addOwnshipData(JPanel stack, String title, Track ownshipTrack,
-			List<LegOfData> ownshipLegs) {
+	public static void addOwnshipData(JPanel stack, String title,
+			Track ownshipTrack, List<LegOfData> ownshipLegs) {
 
 		TimeSeriesCollection dataset1 = new TimeSeriesCollection();
 		TimeSeriesCollection dataset2 = new TimeSeriesCollection();
@@ -47,7 +49,7 @@ public class Plotting {
 		dataset2.addSeries(data2);
 
 		final JFreeChart chart = ChartFactory.createTimeSeriesChart(title, // String
-																				// title,
+																			// title,
 				"Time", // String timeAxisLabel
 				"Course", // String valueAxisLabel,
 				dataset1, // XYDataset dataset,
@@ -93,6 +95,42 @@ public class Plotting {
 				xyPlot.addDomainMarker(bst, Layer.BACKGROUND);
 			}
 		}
+
+		ChartPanel cp = new ChartPanel(chart){
+			/**
+			 * 
+			 */
+			private static final long serialVersionUID = 1L;
+
+			@Override
+			public Dimension getPreferredSize() {
+			    return new Dimension(500, 200);
+			}
+		};
+		stack.add(cp);
+	}
+
+	public static void addLegResults(JPanel stack, TimeSeriesCollection dataset1) {
+
+		final JFreeChart chart = ChartFactory.createTimeSeriesChart(
+				"Leg Results", // String
+								// title,
+				"Time", // String timeAxisLabel
+				"Errpr", // String valueAxisLabel,
+				dataset1, // XYDataset dataset,
+				true, // include legend
+				true, // tooltips
+				false // urls
+				);
+
+		XYPlot xyPlot = (XYPlot) chart.getPlot();
+		xyPlot.setDomainCrosshairVisible(true);
+		xyPlot.setRangeCrosshairVisible(true);
+		final DateAxis axis = (DateAxis) xyPlot.getDomainAxis();
+		axis.setDateFormatOverride(new SimpleDateFormat("hh:mm:ss"));
+
+		final NumberAxis rangeAxis = new LogarithmicAxis("Log(error)");
+		xyPlot.setRangeAxis(rangeAxis);
 
 		ChartPanel cp = new ChartPanel(chart);
 		stack.add(cp);

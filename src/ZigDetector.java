@@ -23,6 +23,9 @@ import org.apache.commons.math3.optim.nonlinear.scalar.GoalType;
 import org.apache.commons.math3.optim.nonlinear.scalar.ObjectiveFunction;
 import org.apache.commons.math3.optim.nonlinear.scalar.noderiv.MultiDirectionalSimplex;
 import org.apache.commons.math3.optim.nonlinear.scalar.noderiv.SimplexOptimizer;
+import org.jfree.data.time.FixedMillisecond;
+import org.jfree.data.time.TimeSeries;
+import org.jfree.data.time.TimeSeriesCollection;
 
 public class ZigDetector {
 	
@@ -51,7 +54,6 @@ public class ZigDetector {
             }
         });
 
-		
 		// Now, we have to slice the data into ownship legs
 		List<LegOfData> ownshipLegs = calculateLegs(ownshipTrack);
 		
@@ -59,10 +61,9 @@ public class ZigDetector {
 		Plotting.addOwnshipData(stack, "Ownship", ownshipTrack, ownshipLegs);
 		Plotting.addOwnshipData(stack, "Target", targetTrack, null);
 		
-		frame.setSize(400, 800);
-		frame.pack();
-		
 		long startTime = System.currentTimeMillis();
+		
+		TimeSeriesCollection legResults = new TimeSeriesCollection();
 		
 		// ok, work through the legs.  In the absence of a Discrete Optimisation algorithm we're taking a brue force approach.
 		// Hopefully Craig can find an optimised alternative to this.
@@ -93,7 +94,6 @@ public class ZigDetector {
 			double[] key = wholeLegOptimiser.getKey();
 			System.out.println("B:" + key[0] + " P:" + key[1] + " Q:" + key[2]);
 			
-			
 			double bestScore = Double.MAX_VALUE;
 			int bestIndex = -1;
 
@@ -105,6 +105,9 @@ public class ZigDetector {
 			int startIndex = 1 + BUFFER_REGION / 2;
 			int endIndex = thisLegSize -1 - BUFFER_REGION / 2;
 			
+			TimeSeries thisSeries = new TimeSeries(thisLeg.getName(), FixedMillisecond.class);
+			legResults.addSeries(thisSeries);
+						
 			for(int index=startIndex;index<endIndex;index++)
 			{
 				List<Long> theseTimes = times;
@@ -117,7 +120,6 @@ public class ZigDetector {
 				// now the bearings
 				List<Double> beforeBearings = theseBearings.subList(0, index);
 				List<Double> afterBearings = theseBearings.subList(index, theseBearings.size()-1);
-				
 				
 		        MultivariateFunction beforeF = new ArcTanSolver(beforeTimes, beforeBearings); 
 		        MultivariateFunction afterF = new ArcTanSolver(afterTimes, afterBearings); 
@@ -142,6 +144,8 @@ public class ZigDetector {
 
 		        // find the total error sum
 		        double sum = beforeOptimiser.getValue() + afterOptimiser.getValue();
+		        
+		        thisSeries.add(new FixedMillisecond(times.get(index)), sum);
 		        	        
 		        // is this better?
 		        if(sum < bestScore)
@@ -155,6 +159,14 @@ public class ZigDetector {
 	        System.out.println(" split sum:" + (int)bestScore + " at time " + new Date(times.get(bestIndex)));
 	        
 		}
+		
+		// ok, also plot the leg attempts
+		Plotting.addLegResults(stack, legResults);
+
+		
+		frame.setSize(400, 800);
+		frame.pack();
+
 		
 		long elapsed = System.currentTimeMillis() - startTime;
 		System.out.println("Elapsed:" + elapsed / 1000 + " secs");
