@@ -38,10 +38,10 @@ public class Track {
 	public Track(final String path) throws IOException {
 
 		DateTimeFormatter formatter = DateTimeFormat
-				.forPattern("dd/MM/yyyy HH:mm:ss");
+				.forPattern("yyMMdd HHmmss");
 
 		// Filename containing the data
-		String csvFilename = "data/ArcTan_Data.csv";
+//		String csvFilename = "data/ArcTan_Data.csv";
 
 		// schema
 		// 100112 120000,SENSOR,12000.00 ,24000.00 ,0.00 ,205.00 ,4.12 ,100.00
@@ -52,7 +52,7 @@ public class Track {
 		CSVReader csvReader = null;
 
 		try {
-			csvReader = new CSVReader(new FileReader(csvFilename), ',', '\'', 3);
+			csvReader = new CSVReader(new FileReader(path), ',', '\'', 3);
 			final List<String[]> content = csvReader.readAll();
 			// variable to hold each row of the List while iterating through it
 			String[] row = null;
@@ -73,10 +73,10 @@ public class Track {
 				/* parsing data from the list to the variables */
 				String thisDate = row[0].toString();
 				dates[counter] = formatter.parseDateTime(thisDate).getMillis();
-				x[counter] = (Double.parseDouble(row[1].toString()));
-				y[counter] = (Double.parseDouble(row[2].toString()));
-				courses[counter] = (Double.parseDouble(row[4].toString()));
-				speeds[counter] = (Double.parseDouble(row[5].toString()));
+				x[counter] = (Double.parseDouble(row[2].toString()));
+				y[counter] = (Double.parseDouble(row[3].toString()));
+				courses[counter] = (Double.parseDouble(row[5].toString()));
+				speeds[counter] = (Double.parseDouble(row[6].toString()));
 				counter++;
 			}
 		} finally {
