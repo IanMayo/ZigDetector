@@ -1,5 +1,9 @@
+import java.awt.BasicStroke;
 import java.awt.Color;
+import java.awt.Font;
 import java.text.SimpleDateFormat;
+import java.util.Iterator;
+import java.util.List;
 
 import javax.swing.JPanel;
 
@@ -8,15 +12,20 @@ import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
 import org.jfree.chart.axis.DateAxis;
 import org.jfree.chart.axis.NumberAxis;
+import org.jfree.chart.plot.IntervalMarker;
+import org.jfree.chart.plot.Marker;
 import org.jfree.chart.plot.XYPlot;
 import org.jfree.chart.renderer.xy.XYLineAndShapeRenderer;
 import org.jfree.data.time.FixedMillisecond;
 import org.jfree.data.time.TimeSeries;
 import org.jfree.data.time.TimeSeriesCollection;
+import org.jfree.ui.Layer;
+import org.jfree.ui.RectangleAnchor;
+import org.jfree.ui.TextAnchor;
 
 public class Plotting {
 
-	public static void addOwnshipData(JPanel stack, Track ownshipTrack) {
+	public static void addOwnshipData(JPanel stack, Track ownshipTrack, List<LegOfData> ownshipLegs) {
 
 		TimeSeriesCollection dataset1 = new TimeSeriesCollection();
 		TimeSeriesCollection dataset2 = new TimeSeriesCollection();
@@ -63,15 +72,27 @@ public class Plotting {
         lineRenderer2.setSeriesPaint(1, Color.blue);
         xyPlot.setRenderer(0, lineRenderer1);
         xyPlot.setRenderer(1, lineRenderer2);
-
-
         
-//		xyPlot.setDataset(1, dataset2);
-//
-//		final NumberAxis xAxis2 = new NumberAxis("Speed");
-//		xyPlot.setRangeAxis(1, xAxis2 );
-////		xyPlot.mapDatasetToRangeAxis(0, 0);
-//		xyPlot.mapDatasetToRangeAxis(1, 1);
+        // let's try the shading
+        Iterator<LegOfData> iter = ownshipLegs.iterator();
+        while (iter.hasNext()) {
+			LegOfData leg = (LegOfData) iter.next();
+	        final Color c = new Color(55, 255, 24, 63);
+	        final Marker bst = new IntervalMarker(
+	        		leg.getStart(), leg.getEnd(),
+	            c, new BasicStroke(2.0f), null, null, 1.0f
+	        );
+	        bst.setLabel(leg.getName());
+	        bst.setLabelAnchor(RectangleAnchor.BOTTOM_RIGHT);
+	        bst.setLabelFont(new Font("SansSerif", Font.ITALIC + Font.BOLD, 10));
+	        bst.setLabelTextAnchor(TextAnchor.BASELINE_RIGHT);
+	        xyPlot.addDomainMarker(bst, Layer.BACKGROUND);
+			
+		}
+        
+        
+        
+        
 
 		ChartPanel cp = new ChartPanel(chart);
 
