@@ -25,7 +25,8 @@ import org.jfree.ui.TextAnchor;
 
 public class Plotting {
 
-	public static void addOwnshipData(JPanel stack, Track ownshipTrack, List<LegOfData> ownshipLegs) {
+	public static void addOwnshipData(JPanel stack, String title, Track ownshipTrack,
+			List<LegOfData> ownshipLegs) {
 
 		TimeSeriesCollection dataset1 = new TimeSeriesCollection();
 		TimeSeriesCollection dataset2 = new TimeSeriesCollection();
@@ -45,8 +46,8 @@ public class Plotting {
 		dataset1.addSeries(data1);
 		dataset2.addSeries(data2);
 
-		final JFreeChart chart = ChartFactory.createTimeSeriesChart				
-				("Ownship", // String title,
+		final JFreeChart chart = ChartFactory.createTimeSeriesChart(title, // String
+																				// title,
 				"Time", // String timeAxisLabel
 				"Course", // String valueAxisLabel,
 				dataset1, // XYDataset dataset,
@@ -54,50 +55,46 @@ public class Plotting {
 				true, // tooltips
 				false // urls
 				);
-		
+
 		XYPlot xyPlot = (XYPlot) chart.getPlot();
 		xyPlot.setDomainCrosshairVisible(true);
 		xyPlot.setRangeCrosshairVisible(true);
-	    final DateAxis axis = (DateAxis) xyPlot.getDomainAxis();
-	    axis.setDateFormatOverride(new SimpleDateFormat("hh:mm:ss"));
+		final DateAxis axis = (DateAxis) xyPlot.getDomainAxis();
+		axis.setDateFormatOverride(new SimpleDateFormat("hh:mm:ss"));
 
-	    final NumberAxis axis2 = new NumberAxis("Speed");
-        xyPlot.setRangeAxis(1, axis2);
-        xyPlot.setDataset(1, dataset2);
-        xyPlot.mapDatasetToRangeAxis(1, 1);
-	    
-        XYLineAndShapeRenderer lineRenderer1 = new XYLineAndShapeRenderer(true, true);
-        lineRenderer1.setSeriesPaint(1, Color.green);
-        XYLineAndShapeRenderer lineRenderer2 = new XYLineAndShapeRenderer(true, true);
-        lineRenderer2.setSeriesPaint(1, Color.blue);
-        xyPlot.setRenderer(0, lineRenderer1);
-        xyPlot.setRenderer(1, lineRenderer2);
-        
-        // let's try the shading
-        Iterator<LegOfData> iter = ownshipLegs.iterator();
-        while (iter.hasNext()) {
-			LegOfData leg = (LegOfData) iter.next();
-	        final Color c = new Color(55, 255, 24, 63);
-	        final Marker bst = new IntervalMarker(
-	        		leg.getStart(), leg.getEnd(),
-	            c, new BasicStroke(2.0f), null, null, 1.0f
-	        );
-	        bst.setLabel(leg.getName());
-	        bst.setLabelAnchor(RectangleAnchor.BOTTOM_RIGHT);
-	        bst.setLabelFont(new Font("SansSerif", Font.ITALIC + Font.BOLD, 10));
-	        bst.setLabelTextAnchor(TextAnchor.BASELINE_RIGHT);
-	        xyPlot.addDomainMarker(bst, Layer.BACKGROUND);
-			
+		final NumberAxis axis2 = new NumberAxis("Speed");
+		xyPlot.setRangeAxis(1, axis2);
+		xyPlot.setDataset(1, dataset2);
+		xyPlot.mapDatasetToRangeAxis(1, 1);
+
+		XYLineAndShapeRenderer lineRenderer1 = new XYLineAndShapeRenderer(true,
+				true);
+		lineRenderer1.setSeriesPaint(1, Color.green);
+		XYLineAndShapeRenderer lineRenderer2 = new XYLineAndShapeRenderer(true,
+				true);
+		lineRenderer2.setSeriesPaint(1, Color.blue);
+		xyPlot.setRenderer(0, lineRenderer1);
+		xyPlot.setRenderer(1, lineRenderer2);
+
+		// let's try the shading
+		if (ownshipLegs != null) {
+			Iterator<LegOfData> iter = ownshipLegs.iterator();
+			while (iter.hasNext()) {
+				LegOfData leg = (LegOfData) iter.next();
+				final Color c = new Color(55, 255, 24, 63);
+				final Marker bst = new IntervalMarker(leg.getStart(),
+						leg.getEnd(), c, new BasicStroke(2.0f), null, null,
+						1.0f);
+				bst.setLabel(leg.getName());
+				bst.setLabelAnchor(RectangleAnchor.BOTTOM_RIGHT);
+				bst.setLabelFont(new Font("SansSerif", Font.ITALIC + Font.BOLD,
+						10));
+				bst.setLabelTextAnchor(TextAnchor.BASELINE_RIGHT);
+				xyPlot.addDomainMarker(bst, Layer.BACKGROUND);
+			}
 		}
-        
-        
-        
-        
 
 		ChartPanel cp = new ChartPanel(chart);
-
 		stack.add(cp);
-
 	}
-
 }

@@ -11,6 +11,7 @@ import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 
+import javax.swing.BoxLayout;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
 
@@ -30,15 +31,13 @@ public class ZigDetector {
 		final String SCENARIO = "Scen1";
 		
 		Track ownshipTrack = new Track("data/" + SCENARIO +"_Ownship.csv");
-		@SuppressWarnings("unused")
 		Track targetTrack = new Track("data/" + SCENARIO +"_Target.csv");
 		Sensor sensor = new Sensor("data/" + SCENARIO +"_Sensor.csv");
 		
 		// create a holder for the data
 		JFrame frame = new JFrame("Results");
-		frame.setSize(400, 800);
 		JPanel stack = new JPanel();
-		stack.setLayout(new FlowLayout());
+		stack.setLayout(new BoxLayout(stack, BoxLayout.Y_AXIS));
 		frame.add(stack);
 		frame.pack();
 		frame.setVisible(true);
@@ -57,8 +56,10 @@ public class ZigDetector {
 		List<LegOfData> ownshipLegs = calculateLegs(ownshipTrack);
 		
 		// ok, time for the first plot
-		Plotting.addOwnshipData(stack, ownshipTrack, ownshipLegs);
+		Plotting.addOwnshipData(stack, "Ownship", ownshipTrack, ownshipLegs);
+		Plotting.addOwnshipData(stack, "Target", targetTrack, null);
 		
+		frame.setSize(400, 800);
 		frame.pack();
 		
 		long startTime = System.currentTimeMillis();
