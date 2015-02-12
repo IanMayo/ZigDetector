@@ -52,7 +52,7 @@ public class Track {
 		CSVReader csvReader = null;
 
 		try {
-			csvReader = new CSVReader(new FileReader(path), ',', '\'', 3);
+			csvReader = new CSVReader(new FileReader(path), ',', '\'', 1);
 			final List<String[]> content = csvReader.readAll();
 			// variable to hold each row of the List while iterating through it
 			String[] row = null;
