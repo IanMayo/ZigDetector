@@ -95,6 +95,8 @@ public class ZigDetector {
 			double bestScore = Double.MAX_VALUE;
 			int bestIndex = -1;
 
+			Double overallScore = wholeLegOptimiser.getValue();
+
 			final int BUFFER_REGION = 4; // the number of measurements to ignore whilst the target is turning 
 
 			// how many points in this leg?
@@ -116,8 +118,11 @@ public class ZigDetector {
 			{
 				// what's the total score for slicing at this index?
 				double sum = sliceLeg(index, bearings, times, MAX_ITERATIONS,
-						wholeLegOptimiser.getValue(), BUFFER_REGION, straightBar,
-						thisSeries);
+						BUFFER_REGION);
+				
+				thisSeries.add(new FixedMillisecond(times.get(index)), sum);
+				straightBar.add(new FixedMillisecond(times.get(index)),  overallScore);
+
 		        	        
 		        // is this better?
 		        if(sum < bestScore)
@@ -194,8 +199,7 @@ public class ZigDetector {
 	 */
 	private static double sliceLeg(int trialIndex, List<Double> bearings,
 			List<Long> times, int MAX_ITERATIONS,
-			double overallScore, final int BUFFER_REGION,
-			TimeSeries straightBar, TimeSeries thisSeries) {
+			 final int BUFFER_REGION) {
 		List<Long> theseTimes = times;
 		List<Double> theseBearings = bearings;				
 		
@@ -231,8 +235,6 @@ public class ZigDetector {
 		// find the total error sum
 		double sum = beforeOptimiser.getValue() + afterOptimiser.getValue();
 		
-		thisSeries.add(new FixedMillisecond(times.get(trialIndex)), sum);
-		straightBar.add(new FixedMillisecond(times.get(trialIndex)),  overallScore);
 		return sum;
 	}
 
