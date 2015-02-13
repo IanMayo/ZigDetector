@@ -10,7 +10,6 @@ import java.beans.Transient;
 import java.text.DecimalFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 
@@ -96,9 +95,6 @@ public class ZigDetector
 		{
 			LegOfData thisLeg = (LegOfData) iterator.next();
 
-			// {
-			// LegOfData thisLeg = ownshipLegs.get(0);
-
 			// ok, slice the data for this leg
 			List<Double> bearings = sensor.extractBearings(thisLeg.getStart(),
 					thisLeg.getEnd());
@@ -111,10 +107,6 @@ public class ZigDetector
 
 			// look at the individual scores (though they're not of interest)
 			System.out.println("Whole Leg:" + out(wholeLegOptimiser));
-			// double[] key = wholeLegOptimiser.getKey();
-			// System.out.println(thisLeg + " B:" + (int) key[0] + " P:" +
-			// key[1]
-			// + " Q:" + key[2]);
 
 			// we will try to beat this score, so set as very high number
 			double bestScore = Double.MAX_VALUE;
@@ -258,22 +250,19 @@ public class ZigDetector
 		double sum = beforeOptimiser.getValue() / beforeTimes.size()
 				+ afterOptimiser.getValue() / afterTimes.size();
 
-		DecimalFormat intF = new DecimalFormat("00");
+	//	DecimalFormat intF = new DecimalFormat("00");
 
-		if (trialIndex > 20 && trialIndex < 50)
-		{
-			System.out.println("index:"
-					+ intF.format(trialIndex)
-					// + " time:" + times.get(trialIndex)
-					+ " " + " Sum:" + numF.format(sum) + " index:"
-					+ dateF.format(new Date(times.get(trialIndex))) + " before:"
-					+ outDates(beforeTimes) + out(beforeOptimiser) + " num:"
-					+ intF.format(beforeTimes.size())
-			// + " after:" + outDates(afterTimes)
-			// + out(afterOptimiser)
-			// + " num:" + intF.format(afterTimes.size())
-					);
-		}
+//		if (trialIndex > 20 && trialIndex < 50)
+//		{
+//			System.out.println("index:"
+//					+ intF.format(trialIndex)
+//					// + " time:" + times.get(trialIndex)
+//					+ " " + " Sum:" + numF.format(sum) + " index:"
+//					+ dateF.format(new Date(times.get(trialIndex))) + " before:"
+//					+ outDates(beforeTimes) + out(beforeOptimiser) + " num:"
+//					+ intF.format(beforeTimes.size()) + " after:" + outDates(afterTimes)
+//					+ out(afterOptimiser) + " num:" + intF.format(afterTimes.size()));
+//		}
 
 		return sum;
 	}
