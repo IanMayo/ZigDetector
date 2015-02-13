@@ -67,7 +67,7 @@ public class ZigDetector
 		container.add(inGrid);
 		inGrid.setLayout(new GridLayout(1, 0));
 
-		// plotThis(inGrid, "Scen1");
+		plotThis(inGrid, "Scen1");
 		plotThis(inGrid, "Scen2");
 
 		frame.pack();
@@ -230,7 +230,7 @@ public class ZigDetector
 		{ 0.2D, 0.6D, 0.2D };
 
 		// convergence tolerance
-		double ftol = 1e-7;
+		double ftol = 1e-5;
 
 		// Nelder and Mead minimisation procedure
 		min.nelderMead(funct, start, step, ftol);
