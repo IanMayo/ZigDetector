@@ -174,9 +174,9 @@ public class ZigDetector {
 		// ok, work through the legs. In the absence of a Discrete Optimisation
 		// algorithm we're taking a brue force approach.
 		// Hopefully Craig can find an optimised alternative to this.
-		// for (Iterator<LegOfData> iterator = ownshipLegs.iterator(); iterator
-		// .hasNext();) {
-		// LegOfData thisLeg = (LegOfData) iterator.next();
+	//	 for (Iterator<LegOfData> iterator = ownshipLegs.iterator(); iterator
+	//	 .hasNext();) {
+	//	 LegOfData thisLeg = (LegOfData) iterator.next();
 
 		{
 			LegOfData thisLeg = ownshipLegs.get(0);
@@ -188,22 +188,7 @@ public class ZigDetector {
 					thisLeg.getEnd());
 
 			// find the error score for the overall leg
-			MultivariateFunction wholeLeg = new ArcTanSolver(times, bearings);
-
-			//
-			SimplexOptimizer wholeOptimizer = new SimplexOptimizer(1e-3, 1e-6);
-
-			//
-			int MAX_ITERATIONS = Integer.MAX_VALUE;
-
-			// calculate the overall score for this leg
-			PointValuePair wholeLegOptimiser = wholeOptimizer.optimize(
-					new MaxEval(MAX_ITERATIONS),
-					new ObjectiveFunction(wholeLeg), GoalType.MINIMIZE,
-					// new InitialGuess(new double[] {1, 1, 1}
-					// ),//beforeBearings.get(0)
-					new InitialGuess(new double[] { bearings.get(0), 0, 0 }),// beforeBearings.get(0)
-					new MultiDirectionalSimplex(3));
+			PointValuePair wholeLegOptimiser = optimiseThis(times, bearings, bearings.get(0));
 
 			// look at the individual scores (though they're not of interest)
 			System.out.println("Whole Leg:" + out(wholeLegOptimiser));
@@ -374,8 +359,12 @@ public class ZigDetector {
 			double initialBearing) {
 		final MultivariateFunction function = new ArcTanSolver(times, bearings);
 	
+//		final SimplexOptimizer optimizerMult = new SimplexOptimizer(1e-3, 1e-6);
 		final SimplexOptimizer optimizerMult = new SimplexOptimizer(1e-3, 1e-6);
+//		final SimplexOptimizer optimizerMult = new SimplexOptimizer(.0001,.0001);
 
+		
+		
 		return optimizerMult.optimize(new MaxEval(MAX_ITERATIONS),
 				new ObjectiveFunction(function), GoalType.MINIMIZE,
 //				new InitialGuess(new double[] { 10, 10, 10 }),// afterBearings.get(0)
