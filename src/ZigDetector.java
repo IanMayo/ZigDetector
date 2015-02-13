@@ -17,20 +17,15 @@ import java.util.List;
 
 import javax.swing.JFrame;
 
-import junit.framework.TestCase;
-
 import org.apache.commons.math3.analysis.MultivariateFunction;
+import org.apache.commons.math3.optim.ConvergenceChecker;
 import org.apache.commons.math3.optim.InitialGuess;
 import org.apache.commons.math3.optim.MaxEval;
-import org.apache.commons.math3.optim.OptimizationData;
 import org.apache.commons.math3.optim.PointValuePair;
 import org.apache.commons.math3.optim.nonlinear.scalar.GoalType;
 import org.apache.commons.math3.optim.nonlinear.scalar.ObjectiveFunction;
 import org.apache.commons.math3.optim.nonlinear.scalar.noderiv.MultiDirectionalSimplex;
 import org.apache.commons.math3.optim.nonlinear.scalar.noderiv.SimplexOptimizer;
-import org.apache.commons.math3.optim.univariate.BrentOptimizer;
-import org.apache.commons.math3.optim.univariate.UnivariateObjectiveFunction;
-import org.apache.commons.math3.optim.univariate.UnivariatePointValuePair;
 import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
 import org.jfree.chart.plot.CombinedDomainXYPlot;
@@ -50,10 +45,12 @@ public class ZigDetector {
 	final static long tgL3start = 1263303804000L; // 13:43:24 GMT
 	final static long end = 1263304838000L; // 14:00:38 GMT 2010
 
+	final static Long timeEnd =  osL1end;
+	
 	final static int MAX_ITERATIONS = Integer.MAX_VALUE;
 
 	final static SimpleDateFormat dateF = new SimpleDateFormat("hh:mm:ss");
-	final static DecimalFormat numF = new DecimalFormat(" 0000.00;-0000.00");
+	final static DecimalFormat numF = new DecimalFormat(" 0000.0000000;-0000.0000000");
 
 	final static int doTest = 0;
 
@@ -96,18 +93,6 @@ public class ZigDetector {
 //		index:42  Sum:0050.53 index:12:36:02 before:12:03:08-12:34:28 B:-0153.01 P:-0000.00 Q:-0000.00 Sum: 0000.01 after:12:36:49-12:57:58 B:-0154.01 P: 0000.00 Q: 0000.00 Sum: 0050.53
 //		index:43  Sum:0001.26 index:12:36:49 before:12:03:08-12:35:15 B:-0153.01 P:-0000.00 Q:-0000.00 Sum: 0000.01 after:12:37:36-12:57:58 B:-0151.92 P: 0000.00 Q: 0000.00 Sum: 0001.25
 //		index:44  Sum:0000.77 index:12:37:36 before:12:03:08-12:36:02 B:-0153.01 P:-0000.00 Q:-0000.00 Sum: 0000.01 after:12:38:23-12:57:58 B:-0151.91 P: 0000.00 Q: 0000.00 Sum: 0000.76
-
-		
-		//
-		// debugOptimiseThis("os2", sensor, tgL2start, osL1end);
-		// debugOptimiseThis("tgt1", sensor, osL2start, tgL2end);
-		// debugOptimiseThis("tgt2", sensor, tgL3start, end);
-
-		// look at the individual scores (though they're not of interest)
-		// double[] key = wholeLegOptimiser.getKey();
-		// System.out.println(thisLeg + " B:" + (int) key[0] + " P:" + key[1]
-		// + " Q:" + key[2]);
-
 	}
 
 	/**
@@ -155,13 +140,16 @@ public class ZigDetector {
 
 		// Now, we have to slice the data into ownship legs
 		List<LegOfData> ownshipLegs = calculateLegs(ownshipTrack);
+		
+		// just play with the first leg
+		ownshipLegs = ownshipLegs.subList(0, 1);
 
 		// create the combined plot - where we show all our data
 		CombinedDomainXYPlot combinedPlot = Plotting.createPlot();
 
 		// ok create the plots of ownship & target tracks
 		Plotting.addOwnshipData(combinedPlot, "O/S ", ownshipTrack,
-				ownshipLegs, null);
+				ownshipLegs, null, timeEnd);
 
 		// capture the start time (used for time elapsed at the end)
 		long startTime = System.currentTimeMillis();
@@ -174,12 +162,12 @@ public class ZigDetector {
 		// ok, work through the legs. In the absence of a Discrete Optimisation
 		// algorithm we're taking a brue force approach.
 		// Hopefully Craig can find an optimised alternative to this.
-	//	 for (Iterator<LegOfData> iterator = ownshipLegs.iterator(); iterator
-	//	 .hasNext();) {
-	//	 LegOfData thisLeg = (LegOfData) iterator.next();
+		 for (Iterator<LegOfData> iterator = ownshipLegs.iterator(); iterator
+		 .hasNext();) {
+		 LegOfData thisLeg = (LegOfData) iterator.next();
 
-		{
-			LegOfData thisLeg = ownshipLegs.get(0);
+	//	{
+	//		LegOfData thisLeg = ownshipLegs.get(0);
 
 			// ok, slice the data for this leg
 			List<Double> bearings = sensor.extractBearings(thisLeg.getStart(),
@@ -259,7 +247,7 @@ public class ZigDetector {
 
 		// show the target track (it contains the results)
 		Plotting.addOwnshipData(combinedPlot, "Tgt ", targetTrack, null,
-				valueMarkers);
+				valueMarkers, timeEnd);
 
 		// wrap the combined chart
 		ChartPanel cp = new ChartPanel(new JFreeChart(
@@ -339,17 +327,21 @@ public class ZigDetector {
 				afterBearings.get(0));
 
 		// find the total error sum
-		double sum = beforeOptimiser.getValue() + afterOptimiser.getValue();
+		double sum = beforeOptimiser.getValue() / beforeTimes.size()  + afterOptimiser.getValue() / afterTimes.size();
 
-		DecimalFormat df = new DecimalFormat("0000.00");
-
-		if (trialIndex > 35 && trialIndex < 60) {
-			System.out.println("index:" + trialIndex
+		DecimalFormat intF = new DecimalFormat("00");
+		
+		if (trialIndex > 20 && trialIndex < 50) {
+			System.out.println("index:" + intF.format(trialIndex)
 //					+ " time:" + times.get(trialIndex) 
-					+ " " + " Sum:" + df.format(sum)
+					+ " " + " Sum:" + numF.format(sum)
 					+ " index:" + dateF.format(new Date(times.get(trialIndex)))
 					+ " before:" + outDates(beforeTimes) + out(beforeOptimiser)
-					+ " after:" + outDates(afterTimes) + out(afterOptimiser));
+					+ " num:" + intF.format(beforeTimes.size())
+			//		+ " after:" + outDates(afterTimes) 
+			//		+ out(afterOptimiser)
+			//		+ " num:" + intF.format(afterTimes.size())
+);
 		}
 
 		return sum;
@@ -359,15 +351,15 @@ public class ZigDetector {
 			double initialBearing) {
 		final MultivariateFunction function = new ArcTanSolver(times, bearings);
 	
+//		final SimplexOptimizer optimizerMult = new SimplexOptimizer(1e-4, 1e-7);
 //		final SimplexOptimizer optimizerMult = new SimplexOptimizer(1e-3, 1e-6);
-		final SimplexOptimizer optimizerMult = new SimplexOptimizer(1e-3, 1e-6);
 //		final SimplexOptimizer optimizerMult = new SimplexOptimizer(.0001,.0001);
 
-		
+//		final SimplexOptimizer optimizerMult = new SimplexOptimizer(1e-1, 1e-3);		
+		final SimplexOptimizer optimizerMult = new SimplexOptimizer(1e-3, 1e-6);
 		
 		return optimizerMult.optimize(new MaxEval(MAX_ITERATIONS),
 				new ObjectiveFunction(function), GoalType.MINIMIZE,
-//				new InitialGuess(new double[] { 10, 10, 10 }),// afterBearings.get(0)
 				new InitialGuess(new double[] { initialBearing, 0, 0 }),// afterBearings.get(0)
 				new MultiDirectionalSimplex(3));
 	}
@@ -493,7 +485,7 @@ public class ZigDetector {
 			// System.out.println("B:" + (int)B + " P:" + P + " Q:" + Q +
 			// " sum:" + runningSum);
 
-			return runningSum;
+			return runningSum / _times.size();
 		}
 
 		private double calcForecast(double B, double P, double Q,
@@ -507,54 +499,6 @@ public class ZigDetector {
 			// System.out.println("DX:" + dX + " dY:" + dY);
 
 			return Math.toDegrees(Math.atan2(dY, dX));
-		}
-	}
-
-	public static class testMe extends TestCase {
-		public void testAtan() throws IOException {
-			// declare which scenario we're running
-			final String SCENARIO = "Scen2";
-
-			// load the data
-			Track ownshipTrack = new Track("data/" + SCENARIO + "_Ownship.csv");
-			// Track targetTrack = new Track("data/" + SCENARIO +"_Target.csv");
-			Sensor sensor = new Sensor("data/" + SCENARIO + "_Sensor.csv");
-
-			// Now, we have to slice the data into ownship legs
-			List<LegOfData> ownshipLegs = calculateLegs(ownshipTrack);
-
-			LegOfData thisLeg = ownshipLegs.get(0);
-
-			// ok, slice the data for this leg
-			List<Double> bearings = sensor.extractBearings(thisLeg.getStart(),
-					thisLeg.getEnd());
-			List<Long> times = sensor.extractTimes(thisLeg.getStart(),
-					thisLeg.getEnd());
-
-			// find the error score for the overall leg
-			ArcTanSolver solver = new ArcTanSolver(times, bearings);
-
-			System.out.println("calc:" + solver.calcForecast(-153, 2, 2, 47));
-
-			//
-			// SimplexOptimizer wholeOptimizer = new SimplexOptimizer(1e-3,
-			// 1e-6);
-			//
-			// //
-			// int MAX_ITERATIONS = Integer.MAX_VALUE;
-			//
-			// // calculate the overall score for this leg
-			// PointValuePair wholeLegOptimiser = wholeOptimizer.optimize(
-			// new MaxEval(MAX_ITERATIONS),
-			// new ObjectiveFunction(wholeLeg),
-			// GoalType.MINIMIZE,
-			// // new InitialGuess(new double[] {1, 1, 1}
-			// ),//beforeBearings.get(0)
-			// new InitialGuess(new double[] {bearings.get(0), 1, 1}
-			// ),//beforeBearings.get(0)
-			// new MultiDirectionalSimplex(3));
-			//
-
 		}
 	}
 
