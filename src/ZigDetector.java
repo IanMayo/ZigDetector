@@ -3,19 +3,23 @@
  *A project to determine the Linear regression for maritime analytic using java
  * Modules such as apache commons maths libraries and Jfreechart are used for analysis and visualization
  */
+import java.awt.BorderLayout;
 import java.awt.Container;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
+import java.awt.GridLayout;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.beans.Transient;
 import java.text.DecimalFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 
 import javax.swing.JFrame;
+import javax.swing.JPanel;
 
 import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
@@ -54,21 +58,27 @@ public class ZigDetector
 
 		// create a holder for the data
 		final JFrame frame = createFrame();
+		frame.setLocation(600, 50);
 		Container container = frame.getContentPane();
 		
-		plotThis(container, "Scen1");
-		plotThis(container, "Scen2");
+		// ok, insert a grid
+		JPanel inGrid = new JPanel();
+		container.add(inGrid);
+		inGrid.setLayout(new GridLayout(0, 2));
 		
+//		plotThis(inGrid, "Scen1");
+		plotThis(inGrid, "Scen2");
+
 		frame.pack();
 
 		long elapsed = System.currentTimeMillis() - startTime;
 		System.out.println("Elapsed:" + elapsed / 1000 + " secs");
 
 	}
-	
-	public static void plotThis(Container container, String scenario) throws Exception
-	{
 
+	public static void plotThis(Container container, String scenario)
+			throws Exception
+	{
 
 		// load the data
 		Track ownshipTrack = new Track("data/" + scenario + "_Ownship.csv");
@@ -79,7 +89,7 @@ public class ZigDetector
 		List<LegOfData> ownshipLegs = calculateLegs(ownshipTrack);
 
 		// just play with the first leg
-		// ownshipLegs = ownshipLegs.subList(0, 1);
+		ownshipLegs = ownshipLegs.subList(1, 2);
 
 		// create the combined plot - where we show all our data
 		CombinedDomainXYPlot combinedPlot = Plotting.createPlot();
@@ -192,37 +202,40 @@ public class ZigDetector
 			@Transient
 			public Dimension getPreferredSize()
 			{
-				return new Dimension(600, 800);
+				return new Dimension(800, 800);
 			}
 
 		};
-		container.add(cp);
+		container.add(cp, BorderLayout.CENTER);
 
 		// System.exit(0);
 	}
 
 	static Minimisation optimiseThis(List<Long> times, List<Double> bearings,
 			double initialBearing)
-	{		
-    //Create instance of Minimisation
-    Minimisation min = new Minimisation();
+	{
+		// Create instance of Minimisation
+		Minimisation min = new Minimisation();
 
-    // Create instace of class holding function to be minimised
-    FlanaganArctan funct = new FlanaganArctan(times, bearings);
+		// Create instace of class holding function to be minimised
+		FlanaganArctan funct = new FlanaganArctan(times, bearings);
 
-    // initial estimates
-    double[] start = {bearings.get(0), 0.0D, 0.0D};
+		// initial estimates
+		double[] start =
+		{ bearings.get(0), 0.0D, 0.0D };
+		// double[] start = {0D, 0.0D, 0.0D};
 
-    // initial step sizes
-    double[] step = {0.2D, 0.6D, 0.2D};
+		// initial step sizes
+		double[] step =
+		{ 0.2D, 0.6D, 0.2D };
 
-    // convergence tolerance
-    double ftol = 1e-5;
+		// convergence tolerance
+		double ftol = 1e-5;
 
-    // Nelder and Mead minimisation procedure
-    min.nelderMead(funct, start, step, ftol);
+		// Nelder and Mead minimisation procedure
+		min.nelderMead(funct, start, step, ftol);
 
-    return min;    
+		return min;
 	}
 
 	/**
@@ -261,21 +274,25 @@ public class ZigDetector
 		double sum = beforeOptimiser.getMinimum() / beforeTimes.size()
 				+ afterOptimiser.getMinimum() / afterTimes.size();
 
-		// DecimalFormat intF = new DecimalFormat("00");
+		DecimalFormat intF = new DecimalFormat("00");
 
-		// if (trialIndex > 20 && trialIndex < 50)
-		// {
-		// System.out.println("index:"
-		// + intF.format(trialIndex)
-		// // + " time:" + times.get(trialIndex)
-		// + " " + " Sum:" + numF.format(sum) + " index:"
-		// + dateF.format(new Date(times.get(trialIndex))) + " before:"
-		// + outDates(beforeTimes) + out(beforeOptimiser) + " num:"
-		// + intF.format(beforeTimes.size()) + " after:" + outDates(afterTimes)
-		// + out(afterOptimiser) + " num:" + intF.format(afterTimes.size()));
-		// }
+			System.out.println("index:"
+					+ intF.format(trialIndex)
+					// + " time:" + times.get(trialIndex)
+					+ " " + " Sum:" + numF.format(sum) + " index:"
+					+ dateF.format(new Date(times.get(trialIndex))) + " before:"
+					+ outDates(beforeTimes) + out(beforeOptimiser) + " num:"
+					+ intF.format(beforeTimes.size()) + " after:" + outDates(afterTimes)
+					+ out(afterOptimiser) + " num:" + intF.format(afterTimes.size()));
 
 		return sum;
+	}
+
+	private static String outDates(List<Long> times)
+	{
+		String res = dateF.format(times.get(0)) + "-"
+				+ dateF.format(times.get(times.size() - 1));
+		return res;
 	}
 
 	/**
@@ -404,11 +421,10 @@ public class ZigDetector
 				e.getWindow().dispose();
 			}
 		});
-		frame.setLayout(new FlowLayout());
-
+		frame.setLayout(new BorderLayout());
+		
 		return frame;
 	}
-
 
 	public static String out(Minimisation res)
 	{
