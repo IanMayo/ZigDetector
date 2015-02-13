@@ -143,6 +143,8 @@ public class Plotting {
 			plotMarkers(xyPlot, valueMarkers);
 		}
 		
+		xyPlot.getRenderer().setSeriesVisibleInLegend(false);
+		
 		
 		parent.add(xyPlot);
 	}
