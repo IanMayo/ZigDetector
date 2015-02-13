@@ -6,7 +6,6 @@
 import java.awt.BorderLayout;
 import java.awt.Container;
 import java.awt.Dimension;
-import java.awt.FlowLayout;
 import java.awt.GridLayout;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
@@ -20,6 +19,8 @@ import java.util.List;
 
 import javax.swing.JFrame;
 import javax.swing.JPanel;
+
+import junit.framework.TestCase;
 
 import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
@@ -60,13 +61,13 @@ public class ZigDetector
 		final JFrame frame = createFrame();
 		frame.setLocation(600, 50);
 		Container container = frame.getContentPane();
-		
+
 		// ok, insert a grid
 		JPanel inGrid = new JPanel();
 		container.add(inGrid);
-		inGrid.setLayout(new GridLayout(0, 2));
-		
-//		plotThis(inGrid, "Scen1");
+		inGrid.setLayout(new GridLayout(1, 0));
+
+		// plotThis(inGrid, "Scen1");
 		plotThis(inGrid, "Scen2");
 
 		frame.pack();
@@ -87,9 +88,7 @@ public class ZigDetector
 
 		// Now, we have to slice the data into ownship legs
 		List<LegOfData> ownshipLegs = calculateLegs(ownshipTrack);
-
-		// just play with the first leg
-		ownshipLegs = ownshipLegs.subList(1, 2);
+		// ownshipLegs = ownshipLegs.subList(1, 2); // just play with the first leg
 
 		// create the combined plot - where we show all our data
 		CombinedDomainXYPlot combinedPlot = Plotting.createPlot();
@@ -151,17 +150,19 @@ public class ZigDetector
 			// loop through the values in this leg
 			// NOTE: this is a brute force algorithm - maybe we can find a
 			// Discrete Optimisation equivalent
-			for (int index = startIndex; index < endIndex; index++)
+			for (int index = 0; index < times.size(); index++)
 			{
 				// what's the total score for slicing at this index?
 
 				// if(index != 50)
 				// continue;
+				int legOneEnd = getEnd(0, times.size(), 5, index);
+				int legTwoStart = getStart(0, times.size(), 5, index);
 
-				int legOneEnd = index - BUFFER_REGION / 2;
-				legOneEnd = Math.max(legOneEnd, 4);
-				int legTwoStart = legOneEnd + BUFFER_REGION;
-				legTwoStart = Math.min(legTwoStart, endIndex - 4);
+				// int legOneEnd = index - BUFFER_REGION / 2;
+				// legOneEnd = Math.max(legOneEnd, 4);
+				// int legTwoStart = legOneEnd + BUFFER_REGION;
+				// legTwoStart = Math.min(legTwoStart, endIndex - 4);
 
 				double sum = sliceLeg(legOneEnd, index, legTwoStart, bearings, times);
 
@@ -202,7 +203,7 @@ public class ZigDetector
 			@Transient
 			public Dimension getPreferredSize()
 			{
-				return new Dimension(800, 800);
+				return new Dimension(1100, 800);
 			}
 
 		};
@@ -220,17 +221,16 @@ public class ZigDetector
 		// Create instace of class holding function to be minimised
 		FlanaganArctan funct = new FlanaganArctan(times, bearings);
 
-		// initial estimates
-		double[] start =
-		{ bearings.get(0), 0.0D, 0.0D };
-		// double[] start = {0D, 0.0D, 0.0D};
+		// initial estimates		
+		Double firstBearing = bearings.get(0);
+		double[] start ={firstBearing, 0.0D, 0.0D};
 
 		// initial step sizes
 		double[] step =
 		{ 0.2D, 0.6D, 0.2D };
 
 		// convergence tolerance
-		double ftol = 1e-5;
+		double ftol = 1e-7;
 
 		// Nelder and Mead minimisation procedure
 		min.nelderMead(funct, start, step, ftol);
@@ -255,35 +255,52 @@ public class ZigDetector
 		List<Long> theseTimes = times;
 		List<Double> theseBearings = bearings;
 
-		// first the times
-		List<Long> beforeTimes = theseTimes.subList(0, legOneEnd);
-		List<Long> afterTimes = theseTimes.subList(legTwoStart,
-				theseTimes.size() - 1);
+		Date thisD = new Date(times.get(trialIndex));
+		
+//		if((legOneEnd == -1) || (legTwoStart == -1))
+//				return Double.MAX_VALUE;
+		
+		double beforeScore = 0;
+		double afterScore = 0;
 
-		List<Double> beforeBearings = theseBearings.subList(0, legOneEnd);
-		List<Double> afterBearings = theseBearings.subList(legTwoStart,
-				theseTimes.size() - 1);
+		String msg = dateF.format(thisD);
+		
+		if (legOneEnd != -1)
+		{
+			List<Long> beforeTimes = theseTimes.subList(0, legOneEnd);
+			List<Double> beforeBearings = theseBearings.subList(0, legOneEnd);
+			Minimisation beforeOptimiser = optimiseThis(beforeTimes, beforeBearings,
+					beforeBearings.get(0));
+			beforeScore = beforeOptimiser.getMinimum() / beforeTimes.size();
+			msg += " BEFORE:" + dateF.format(times.get(0))+"-"+dateF.format(times.get(legOneEnd)) + " ";
+		}
 
-		// fit a curve to the period after the turn
-		Minimisation beforeOptimiser = optimiseThis(beforeTimes, beforeBearings,
-				beforeBearings.get(0));
-		Minimisation afterOptimiser = optimiseThis(afterTimes, afterBearings,
-				afterBearings.get(0));
+		if (legTwoStart != -1)
+		{
+			List<Long> afterTimes = theseTimes.subList(legTwoStart,
+					theseTimes.size() - 1);
+			List<Double> afterBearings = theseBearings.subList(legTwoStart,
+					theseTimes.size() - 1);
+			Minimisation afterOptimiser = optimiseThis(afterTimes, afterBearings,
+					afterBearings.get(0));
+			afterScore = afterOptimiser.getMinimum() / afterTimes.size();
+			msg += " AFTER:" + dateF.format(times.get(legTwoStart))+"-"+dateF.format(times.get(times.size()-1)) + " ";
+		}
 
 		// find the total error sum
-		double sum = beforeOptimiser.getMinimum() / beforeTimes.size()
-				+ afterOptimiser.getMinimum() / afterTimes.size();
+		double sum = beforeScore + afterScore;
+		
+	//	System.out.println(msg+  "SUM:" + sum);
 
-		DecimalFormat intF = new DecimalFormat("00");
-
-			System.out.println("index:"
-					+ intF.format(trialIndex)
-					// + " time:" + times.get(trialIndex)
-					+ " " + " Sum:" + numF.format(sum) + " index:"
-					+ dateF.format(new Date(times.get(trialIndex))) + " before:"
-					+ outDates(beforeTimes) + out(beforeOptimiser) + " num:"
-					+ intF.format(beforeTimes.size()) + " after:" + outDates(afterTimes)
-					+ out(afterOptimiser) + " num:" + intF.format(afterTimes.size()));
+		// DecimalFormat intF = new DecimalFormat("00");
+		// System.out.println("index:"
+		// + intF.format(trialIndex)
+		// // + " time:" + times.get(trialIndex)
+		// + " " + " Sum:" + numF.format(sum) + " index:"
+		// + dateF.format(new Date(times.get(trialIndex))) + " before:"
+		// + outDates(beforeTimes) + out(beforeOptimiser) + " num:"
+		// + intF.format(beforeTimes.size()) + " after:" + outDates(afterTimes)
+		// + out(afterOptimiser) + " num:" + intF.format(afterTimes.size()));
 
 		return sum;
 	}
@@ -422,7 +439,7 @@ public class ZigDetector
 			}
 		});
 		frame.setLayout(new BorderLayout());
-		
+
 		return frame;
 	}
 
@@ -434,4 +451,78 @@ public class ZigDetector
 
 		return out;
 	}
+
+	public static int getEnd(int start, int end, int buffer, int index)
+	{
+		int res = -1;
+		int MIN_SIZE = 3;
+		int semiBuffer = buffer / 2;
+
+		int earliestPossibleStartPoint = start + (MIN_SIZE - 1);
+
+		if (index - semiBuffer > earliestPossibleStartPoint)
+		{
+			res = index - semiBuffer - 1;
+		}
+		return res;
+	}
+
+	public static int getStart(int start, int end, int buffer, int index)
+	{
+		int res = -1;
+		int MIN_SIZE = 3;
+		int semiBuffer = buffer / 2;
+
+		int lastPossibleStartPoint = end - (MIN_SIZE - 1);
+
+		if (index + semiBuffer < lastPossibleStartPoint)
+		{
+			res = index + semiBuffer + 1;
+		}
+		return res;
+	}
+
+	public static class TestMe extends TestCase
+	{
+		public void testStartTimes()
+		{
+			assertEquals(2, 5 / 2);
+
+			assertEquals("correct", -1, getEnd(0, 15, 5, 0));
+			assertEquals("correct", -1, getEnd(0, 15, 5, 1));
+			assertEquals("correct", -1, getEnd(0, 15, 5, 2));
+			assertEquals("correct", -1, getEnd(0, 15, 5, 3));
+			assertEquals("correct", -1, getEnd(0, 15, 5, 4));
+			assertEquals("correct", 2, getEnd(0, 15, 5, 5));
+			assertEquals("correct", 3, getEnd(0, 15, 5, 6));
+			assertEquals("correct", 4, getEnd(0, 15, 5, 7));
+			assertEquals("correct", 5, getEnd(0, 15, 5, 8));
+			assertEquals("correct", 6, getEnd(0, 15, 5, 9));
+			assertEquals("correct", 7, getEnd(0, 15, 5, 10));
+			assertEquals("correct", 8, getEnd(0, 15, 5, 11));
+			assertEquals("correct", 9, getEnd(0, 15, 5, 12));
+			assertEquals("correct", 10, getEnd(0, 15, 5, 13));
+			assertEquals("correct", 11, getEnd(0, 15, 5, 14));
+			assertEquals("correct", 12, getEnd(0, 15, 5, 15));
+
+			assertEquals("correct", 3, getStart(0, 15, 5, 0));
+			assertEquals("correct", 4, getStart(0, 15, 5, 1));
+			assertEquals("correct", 5, getStart(0, 15, 5, 2));
+			assertEquals("correct", 6, getStart(0, 15, 5, 3));
+			assertEquals("correct", 7, getStart(0, 15, 5, 4));
+			assertEquals("correct", 8, getStart(0, 15, 5, 5));
+			assertEquals("correct", 9, getStart(0, 15, 5, 6));
+			assertEquals("correct", 10, getStart(0, 15, 5, 7));
+			assertEquals("correct", 11, getStart(0, 15, 5, 8));
+			assertEquals("correct", 12, getStart(0, 15, 5, 9));
+			assertEquals("correct", 13, getStart(0, 15, 5, 10));
+			assertEquals("correct", -1, getStart(0, 15, 5, 11));
+			assertEquals("correct", -1, getStart(0, 15, 5, 12));
+			assertEquals("correct", -1, getStart(0, 15, 5, 13));
+			assertEquals("correct", -1, getStart(0, 15, 5, 14));
+			assertEquals("correct", -1, getStart(0, 15, 5, 15));
+
+		}
+	}
+
 }
