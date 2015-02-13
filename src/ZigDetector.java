@@ -88,8 +88,8 @@ public class ZigDetector {
 	                new MultiDirectionalSimplex(3)); 
 
 			// look at the individual scores (though they're not of interest)
-//			double[] key = wholeLegOptimiser.getKey();
-//			System.out.println("B:" + key[0] + " P:" + key[1] + " Q:" + key[2]);
+			double[] key = wholeLegOptimiser.getKey();
+			System.out.println(thisLeg + " B:" + (int) key[0] + " P:" + key[1] + " Q:" + key[2]);
 	
 			// we will try to beat this score, so set as very high number
 			double bestScore = Double.MAX_VALUE;
@@ -122,7 +122,6 @@ public class ZigDetector {
 				
 				thisSeries.add(new FixedMillisecond(times.get(index)), sum);
 				straightBar.add(new FixedMillisecond(times.get(index)),  overallScore);
-
 		        	        
 		        // is this better?
 		        if(sum < bestScore)
@@ -133,7 +132,6 @@ public class ZigDetector {
 		        }
 			}			
 			
-			valueMarkers.add(times.get(bestIndex));
 			
 		}
 		
@@ -325,8 +323,9 @@ public class ZigDetector {
         	
         	// ok, loop through the data
         	for (int i = 0; i < _times.size(); i++) {
-        		Long elapsedSecs = _times.get(i);
-				double thisForecast = calcForecast(B, P, Q, elapsedSecs / 1000d); 
+        		Long elapsedMillis = _times.get(i) - _times.get(0);
+        		Double elapsedSecs = elapsedMillis / 1000d;        		
+				double thisForecast = calcForecast(B, P, Q, elapsedSecs); 
 				Double thisMeasured = _bearings.get(i);
 				double thisError = Math.pow(thisForecast - thisMeasured, 2);
 				runningSum += thisError;
@@ -338,9 +337,12 @@ public class ZigDetector {
 		}
 
 		private double calcForecast(double B, double P, double Q,
-				Double elapsedSecs) {
+				double elapsedSecs) {
 //			return Math.toDegrees(Math.atan2(Math.sin(Math.toRadians(B))+P*elapsedSecs,Math.cos(Math.toRadians(B))+Q*elapsedSecs));
-			return Math.toDegrees(Math.atan2(Math.cos(Math.toRadians(B))+Q*elapsedSecs, Math.sin(Math.toRadians(B))+P*elapsedSecs));
+			
+			double dY = Math.cos(Math.toRadians(B))+Q*elapsedSecs;
+			double dX = Math.sin(Math.toRadians(B))+P*elapsedSecs;
+			return Math.toDegrees(Math.atan2(dX, dY));
 		}		
 	}
 }
