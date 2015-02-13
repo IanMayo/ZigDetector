@@ -8,5 +8,6 @@
 	<classpathentry kind="lib" path="lib/commons-math3-3.4.1-javadoc.jar"/>
 	<classpathentry kind="lib" path="lib/commons-math3-3.4.1.jar" sourcepath="lib/commons-math3-3.4.1-src.zip"/>
 	<classpathentry kind="lib" path="lib/joda-time-2.2.jar"/>
+	<classpathentry kind="con" path="org.eclipse.jdt.junit.JUNIT_CONTAINER/3"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>
