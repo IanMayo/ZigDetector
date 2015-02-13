@@ -147,8 +147,8 @@ public class ZigDetector
 				int legTwoStart = legOneEnd + BUFFER_REGION;
 				legTwoStart = Math.min(legTwoStart, endIndex - 4);
 
-				double sum = sliceLeg(index, bearings, times, MAX_ITERATIONS,
-						legOneEnd, legTwoStart);
+				double sum = sliceLeg(legOneEnd, index, legTwoStart, bearings,
+						times);
 
 				thisSeries.add(new FixedMillisecond(times.get(index)), sum);
 				straightBar.add(new FixedMillisecond(times.get(index)), overallScore);
@@ -216,7 +216,6 @@ public class ZigDetector
 	 * @param trialIndex
 	 * @param bearings
 	 * @param times
-	 * @param MAX_ITERATIONS
 	 * @param overallScore
 	 *          the overall score for this leg
 	 * @param BUFFER_REGION
@@ -224,9 +223,8 @@ public class ZigDetector
 	 * @param thisSeries
 	 * @return
 	 */
-	private static double sliceLeg(int trialIndex, List<Double> bearings,
-			List<Long> times, int MAX_ITERATIONS, final int legOneEnd,
-			final int legTwoStart)
+	private static double sliceLeg(final int legOneEnd, int trialIndex,
+			final int legTwoStart, List<Double> bearings, List<Long> times)
 	{
 		List<Long> theseTimes = times;
 		List<Double> theseBearings = bearings;
