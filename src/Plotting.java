@@ -35,7 +35,7 @@ public class Plotting {
 	}
 	
 	public static void addOwnshipData( CombinedDomainXYPlot parent, String title,
-			Track ownshipTrack, List<LegOfData> ownshipLegs, List<Long> valueMarkers) {
+			Track ownshipTrack, List<LegOfData> ownshipLegs, List<Long> valueMarkers, final Long endTime) {
 
 		TimeSeriesCollection dataset1 = new TimeSeriesCollection();
 		TimeSeriesCollection dataset2 = new TimeSeriesCollection();
@@ -49,8 +49,12 @@ public class Plotting {
 
 		// obtain the data for the points
 		for (int i = 0; i < times.length; i++) {
-			data1.add(new FixedMillisecond(times[i]), courses[i]);
-			data2.add(new FixedMillisecond(times[i]), speeds[i]);
+			long thisTime = times[i];
+			if(endTime == null || thisTime <= endTime)
+			{
+				data1.add(new FixedMillisecond(thisTime), courses[i]);
+				data2.add(new FixedMillisecond(thisTime), speeds[i]);
+			}
 		}
 		dataset1.addSeries(data1);
 		dataset2.addSeries(data2);
