@@ -1,4 +1,4 @@
-DTG,Track name, x (m), y (m), z (m), course (degs), speed (m/s), dem course (Degs), dem speed (m/s), dem depth (m), fuel, activity
+DTG,Track name, x (m), y (m), z (m), bearing (degs)
 100112 120000,12000.00 ,24000.00 ,0.00 ,-153.43 
 100112 120047,11879.83 ,23850.83 ,0.00 ,-153.14 
 100112 120134,11704.09 ,23774.63 ,0.00 ,-153.02 

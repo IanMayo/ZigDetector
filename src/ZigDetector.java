@@ -3,26 +3,25 @@
  *A project to determine the Linear regression for maritime analytic using java
  * Modules such as apache commons maths libraries and Jfreechart are used for analysis and visualization
  */
+import java.awt.BorderLayout;
+import java.awt.Container;
 import java.awt.Dimension;
+import java.awt.GridLayout;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.beans.Transient;
 import java.text.DecimalFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 
 import javax.swing.JFrame;
+import javax.swing.JPanel;
 
-import org.apache.commons.math3.analysis.MultivariateFunction;
-import org.apache.commons.math3.optim.InitialGuess;
-import org.apache.commons.math3.optim.MaxEval;
-import org.apache.commons.math3.optim.PointValuePair;
-import org.apache.commons.math3.optim.nonlinear.scalar.GoalType;
-import org.apache.commons.math3.optim.nonlinear.scalar.ObjectiveFunction;
-import org.apache.commons.math3.optim.nonlinear.scalar.noderiv.MultiDirectionalSimplex;
-import org.apache.commons.math3.optim.nonlinear.scalar.noderiv.SimplexOptimizer;
+import junit.framework.TestCase;
+
 import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
 import org.jfree.chart.plot.CombinedDomainXYPlot;
@@ -30,9 +29,13 @@ import org.jfree.data.time.FixedMillisecond;
 import org.jfree.data.time.TimeSeries;
 import org.jfree.data.time.TimeSeriesCollection;
 
+import flanagan.math.Minimisation;
+import flanagan.math.MinimisationFunction;
+
 public class ZigDetector
 {
 
+	private static final double CONVERGE_TOLERANCE = 1e-5;
 	final static long tgL1start = 1263297600000L; // 12:00:00 GMT
 	final static long osL1start = 1263297741000L; // 12:02:21 GMT
 	final static long tgL1end = 1263300091000L; // 12:41:31 GMT 2010
@@ -45,32 +48,55 @@ public class ZigDetector
 
 	final static Long timeEnd = null; // osL1end;
 
-	final static int MAX_ITERATIONS = Integer.MAX_VALUE;
-
 	final static SimpleDateFormat dateF = new SimpleDateFormat("hh:mm:ss");
 	final static DecimalFormat numF = new DecimalFormat(
 			" 0000.0000000;-0000.0000000");
 
-	final static int doTest = 0;
-
 	public static void main(String[] args) throws Exception
 	{
-		// declare which scenario we're running
-		final String SCENARIO = "Scen1";
 
-		// load the data
-		Track ownshipTrack = new Track("data/" + SCENARIO + "_Ownship.csv");
-		Track targetTrack = new Track("data/" + SCENARIO + "_Target.csv");
-		Sensor sensor = new Sensor("data/" + SCENARIO + "_Sensor.csv");
+		// capture the start time (used for time elapsed at the end)
+		long startTime = System.currentTimeMillis();
 
 		// create a holder for the data
 		final JFrame frame = createFrame();
+		frame.setLocation(600, 50);
+		Container container = frame.getContentPane();
+
+		// ok, insert a grid
+		JPanel inGrid = new JPanel();
+		container.add(inGrid);
+		GridLayout grid = new GridLayout(0, 2);
+		inGrid.setLayout(grid);
+
+		plotThis(inGrid, "Scen1");
+		plotThis(inGrid, "Scen2");
+		plotThis(inGrid, "Scen3");
+		plotThis(inGrid, "Scen4");
+		
+		if(inGrid.getComponentCount() == 1)
+			grid.setColumns(1);
+			  
+
+		frame.pack();
+
+		long elapsed = System.currentTimeMillis() - startTime;
+		System.out.println("Elapsed:" + elapsed / 1000 + " secs");
+
+	}
+
+	public static void plotThis(Container container, String scenario)
+			throws Exception
+	{
+
+		// load the data
+		Track ownshipTrack = new Track("data/" + scenario + "_Ownship.csv");
+		Track targetTrack = new Track("data/" + scenario + "_Target.csv");
+		Sensor sensor = new Sensor("data/" + scenario + "_Sensor.csv");
 
 		// Now, we have to slice the data into ownship legs
 		List<LegOfData> ownshipLegs = calculateLegs(ownshipTrack);
-
-		// just play with the first leg
-		// ownshipLegs = ownshipLegs.subList(0, 1);
+		// ownshipLegs = ownshipLegs.subList(1, 2); // just play with the first leg
 
 		// create the combined plot - where we show all our data
 		CombinedDomainXYPlot combinedPlot = Plotting.createPlot();
@@ -78,9 +104,6 @@ public class ZigDetector
 		// ok create the plots of ownship & target tracks
 		Plotting.addOwnshipData(combinedPlot, "O/S ", ownshipTrack, ownshipLegs,
 				null, timeEnd);
-
-		// capture the start time (used for time elapsed at the end)
-		long startTime = System.currentTimeMillis();
 
 		// get ready to store the results runs
 		TimeSeriesCollection legResults = new TimeSeriesCollection();
@@ -102,7 +125,7 @@ public class ZigDetector
 					thisLeg.getEnd());
 
 			// find the error score for the overall leg
-			PointValuePair wholeLegOptimiser = optimiseThis(times, bearings,
+			Minimisation wholeLegOptimiser = optimiseThis(times, bearings,
 					bearings.get(0));
 
 			// look at the individual scores (though they're not of interest)
@@ -112,15 +135,7 @@ public class ZigDetector
 			double bestScore = Double.MAX_VALUE;
 			int bestIndex = -1;
 
-			Double overallScore = wholeLegOptimiser.getValue();
-
-			final int BUFFER_REGION = 2; // the number of measurements to ignore
-			// whilst the target is turning
-
-			// how many points in this leg?
-			int thisLegSize = times.size();
-			int startIndex = 2;
-			int endIndex = thisLegSize - 3;
+			Double overallScore = wholeLegOptimiser.getMinimum();
 
 			// create a placeholder for the overall score for this leg
 			TimeSeries straightBar = new TimeSeries("Whole " + thisLeg.getName(),
@@ -135,20 +150,21 @@ public class ZigDetector
 			// loop through the values in this leg
 			// NOTE: this is a brute force algorithm - maybe we can find a
 			// Discrete Optimisation equivalent
-			for (int index = startIndex; index < endIndex; index++)
+			for (int index = 0; index < times.size(); index++)
 			{
 				// what's the total score for slicing at this index?
 
 				// if(index != 50)
 				// continue;
+				int legOneEnd = getEnd(0, times.size(), 5, index);
+				int legTwoStart = getStart(0, times.size(), 5, index);
 
-				int legOneEnd = index - BUFFER_REGION / 2;
-				legOneEnd = Math.max(legOneEnd, 4);
-				int legTwoStart = legOneEnd + BUFFER_REGION;
-				legTwoStart = Math.min(legTwoStart, endIndex - 4);
+				// int legOneEnd = index - BUFFER_REGION / 2;
+				// legOneEnd = Math.max(legOneEnd, 4);
+				// int legTwoStart = legOneEnd + BUFFER_REGION;
+				// legTwoStart = Math.min(legTwoStart, endIndex - 4);
 
-				double sum = sliceLeg(legOneEnd, index, legTwoStart, bearings,
-						times);
+				double sum = sliceLeg(legOneEnd, index, legTwoStart, bearings, times);
 
 				thisSeries.add(new FixedMillisecond(times.get(index)), sum);
 				straightBar.add(new FixedMillisecond(times.get(index)), overallScore);
@@ -174,7 +190,7 @@ public class ZigDetector
 				valueMarkers, timeEnd);
 
 		// wrap the combined chart
-		ChartPanel cp = new ChartPanel(new JFreeChart("Results for " + SCENARIO,
+		ChartPanel cp = new ChartPanel(new JFreeChart("Results for " + scenario + " Tol:" + CONVERGE_TOLERANCE,
 				JFreeChart.DEFAULT_TITLE_FONT, combinedPlot, true))
 		{
 
@@ -187,29 +203,39 @@ public class ZigDetector
 			@Transient
 			public Dimension getPreferredSize()
 			{
-				return new Dimension(1000, 800);
+				return new Dimension(1100, 400);
 			}
 
 		};
-		frame.add(cp);
-		frame.pack();
-
-		long elapsed = System.currentTimeMillis() - startTime;
-		System.out.println("Elapsed:" + elapsed / 1000 + " secs");
+		container.add(cp, BorderLayout.CENTER);
 
 		// System.exit(0);
 	}
 
-	static PointValuePair optimiseThis(List<Long> times, List<Double> bearings,
+	static Minimisation optimiseThis(List<Long> times, List<Double> bearings,
 			double initialBearing)
 	{
-		final MultivariateFunction function = new ArcTanSolver(times, bearings);
-		final SimplexOptimizer optimizerMult = new SimplexOptimizer(1e-3, 1e-6);
+		// Create instance of Minimisation
+		Minimisation min = new Minimisation();
 
-		return optimizerMult.optimize(new MaxEval(MAX_ITERATIONS),
-				new ObjectiveFunction(function), GoalType.MINIMIZE, new InitialGuess(
-						new double[]
-						{ initialBearing, 0, 0 }), new MultiDirectionalSimplex(3));
+		// Create instace of class holding function to be minimised
+		FlanaganArctan funct = new FlanaganArctan(times, bearings);
+
+		// initial estimates		
+		Double firstBearing = bearings.get(0);
+		double[] start ={firstBearing, 0.0D, 0.0D};
+
+		// initial step sizes
+		double[] step =
+		{ 0.2D, 0.3D, 0.3D };
+
+		// convergence tolerance
+		double ftol = CONVERGE_TOLERANCE;
+
+		// Nelder and Mead minimisation procedure
+		min.nelderMead(funct, start, step, ftol);
+
+		return min;
 	}
 
 	/**
@@ -229,40 +255,63 @@ public class ZigDetector
 		List<Long> theseTimes = times;
 		List<Double> theseBearings = bearings;
 
-		// first the times
-		List<Long> beforeTimes = theseTimes.subList(0, legOneEnd);
-		List<Long> afterTimes = theseTimes.subList(legTwoStart,
-				theseTimes.size() - 1);
+		Date thisD = new Date(times.get(trialIndex));
+		
+//		if((legOneEnd == -1) || (legTwoStart == -1))
+//				return Double.MAX_VALUE;
+		
+		double beforeScore = 0;
+		double afterScore = 0;
 
-		List<Double> beforeBearings = theseBearings.subList(0, legOneEnd);
-		List<Double> afterBearings = theseBearings.subList(legTwoStart,
-				theseTimes.size() - 1);
+		@SuppressWarnings("unused")
+		String msg = dateF.format(thisD);
+		
+		if (legOneEnd != -1)
+		{
+			List<Long> beforeTimes = theseTimes.subList(0, legOneEnd);
+			List<Double> beforeBearings = theseBearings.subList(0, legOneEnd);
+			Minimisation beforeOptimiser = optimiseThis(beforeTimes, beforeBearings,
+					beforeBearings.get(0));
+			beforeScore = beforeOptimiser.getMinimum() / beforeTimes.size();
+			msg += " BEFORE:" + dateF.format(times.get(0))+"-"+dateF.format(times.get(legOneEnd)) + " ";
+		}
 
-		// fit a curve to the period after the turn
-		PointValuePair beforeOptimiser = optimiseThis(beforeTimes, beforeBearings,
-				beforeBearings.get(0));
-		PointValuePair afterOptimiser = optimiseThis(afterTimes, afterBearings,
-				afterBearings.get(0));
+		if (legTwoStart != -1)
+		{
+			List<Long> afterTimes = theseTimes.subList(legTwoStart,
+					theseTimes.size() - 1);
+			List<Double> afterBearings = theseBearings.subList(legTwoStart,
+					theseTimes.size() - 1);
+			Minimisation afterOptimiser = optimiseThis(afterTimes, afterBearings,
+					afterBearings.get(0));
+			afterScore = afterOptimiser.getMinimum() / afterTimes.size();
+			msg += " AFTER:" + dateF.format(times.get(legTwoStart))+"-"+dateF.format(times.get(times.size()-1)) + " ";
+		}
 
 		// find the total error sum
-		double sum = beforeOptimiser.getValue() / beforeTimes.size()
-				+ afterOptimiser.getValue() / afterTimes.size();
+		double sum = beforeScore + afterScore;
+		
+	//	System.out.println(msg+  "SUM:" + sum);
 
-	//	DecimalFormat intF = new DecimalFormat("00");
-
-//		if (trialIndex > 20 && trialIndex < 50)
-//		{
-//			System.out.println("index:"
-//					+ intF.format(trialIndex)
-//					// + " time:" + times.get(trialIndex)
-//					+ " " + " Sum:" + numF.format(sum) + " index:"
-//					+ dateF.format(new Date(times.get(trialIndex))) + " before:"
-//					+ outDates(beforeTimes) + out(beforeOptimiser) + " num:"
-//					+ intF.format(beforeTimes.size()) + " after:" + outDates(afterTimes)
-//					+ out(afterOptimiser) + " num:" + intF.format(afterTimes.size()));
-//		}
+		// DecimalFormat intF = new DecimalFormat("00");
+		// System.out.println("index:"
+		// + intF.format(trialIndex)
+		// // + " time:" + times.get(trialIndex)
+		// + " " + " Sum:" + numF.format(sum) + " index:"
+		// + dateF.format(new Date(times.get(trialIndex))) + " before:"
+		// + outDates(beforeTimes) + out(beforeOptimiser) + " num:"
+		// + intF.format(beforeTimes.size()) + " after:" + outDates(afterTimes)
+		// + out(afterOptimiser) + " num:" + intF.format(afterTimes.size()));
 
 		return sum;
+	}
+
+	@SuppressWarnings("unused")
+	private static String outDates(List<Long> times)
+	{
+		String res = dateF.format(times.get(0)) + "-"
+				+ dateF.format(times.get(times.size() - 1));
+		return res;
 	}
 
 	/**
@@ -333,24 +382,19 @@ public class ZigDetector
 		return legs;
 	}
 
-	/**
-	 * function to generate sum of squares of errors for a single permutation of
-	 * B,P,Q
-	 * 
-	 */
-	private static class ArcTanSolver implements MultivariateFunction
+	private static class FlanaganArctan implements MinimisationFunction
 	{
 		final private List<Long> _times;
 		final private List<Double> _bearings;
 
-		public ArcTanSolver(List<Long> beforeTimes, List<Double> beforeBearings)
+		public FlanaganArctan(List<Long> beforeTimes, List<Double> beforeBearings)
 		{
 			_times = beforeTimes;
 			_bearings = beforeBearings;
 		}
 
-		@Override
-		public double value(double[] point)
+		// evaluation function
+		public double function(double[] point)
 		{
 			double B = point[0];
 			double P = point[1];
@@ -367,25 +411,14 @@ public class ZigDetector
 				double thisMeasured = _bearings.get(i);
 				double thisError = Math.pow(thisForecast - thisMeasured, 2);
 				runningSum += thisError;
-
 			}
-
-			// System.out.println("B:" + (int)B + " P:" + P + " Q:" + Q +
-			// " sum:" + runningSum);
-
 			return runningSum / _times.size();
 		}
 
 		private double calcForecast(double B, double P, double Q, double elapsedSecs)
 		{
-			// return
-			// Math.toDegrees(Math.atan2(Math.sin(Math.toRadians(B))+P*elapsedSecs,Math.cos(Math.toRadians(B))+Q*elapsedSecs));
-
 			double dX = Math.cos(Math.toRadians(B)) + Q * elapsedSecs;
 			double dY = Math.sin(Math.toRadians(B)) + P * elapsedSecs;
-
-			// System.out.println("DX:" + dX + " dY:" + dY);
-
 			return Math.toDegrees(Math.atan2(dY, dX));
 		}
 	}
@@ -407,82 +440,91 @@ public class ZigDetector
 				e.getWindow().dispose();
 			}
 		});
+		frame.setLayout(new BorderLayout());
 
 		return frame;
 	}
 
-	private static String outDates(List<Long> times)
+	public static String out(Minimisation res)
 	{
-		String res = dateF.format(times.get(0)) + "-"
-				+ dateF.format(times.get(times.size() - 1));
-		return res;
-	}
-
-	//
-	// System.out.println(name + " times:" + outDates(times) + " B:" +
-	// numF.format(key[0]) + " P:" + numF.format(key[1]) + " Q:"
-	// + numF.format(key[2]) + " Sum:" + wholeLegOptimiser.getValue());
-
-	public static String out(PointValuePair res)
-	{
-		double[] key = res.getKey();
+		double[] key = res.getParamValues();
 		String out = " B:" + numF.format(key[0]) + " P:" + numF.format(key[1])
-				+ " Q:" + numF.format(key[2]) + " Sum:" + numF.format(res.getValue());
+				+ " Q:" + numF.format(key[2]) + " Sum:" + numF.format(res.getMinimum());
 
 		return out;
 	}
 
-	// public static void main2(String[] args) throws IOException {
-	// // declare which scenario we're running
-	// final String SCENARIO = "Scen1";
-	//
-	// // load the data
-	// // Track ownshipTrack = new Track("data/" + SCENARIO + "_Ownship.csv");
-	// // Track targetTrack = new Track("data/" + SCENARIO +"_Target.csv");
-	// Sensor sensor = new Sensor("data/" + SCENARIO + "_Sensor.csv");
-	//
-	// // ok, slice the data for this leg
-	// debugOptimiseThis("leg one", sensor, osL1start, osL1end);
-	//
-	// System.out.println("slice at:" + new Date(tgL1end));
-	// // debugOptimiseThis("leg one befor", sensor, osL1start, tgL1end);
-	// // debugOptimiseThis("leg one after", sensor, tgL2start, osL1end);
-	//
-	// // debugOptimiseThis("test run", sensor, 1263300185000L, 1263301078000L);
-	//
-	// debugOptimiseThis("36 ", sensor, 1263297788000L, 1263299386000L);
-	// debugOptimiseThis("37 ", sensor, 1263297788000L, 1263299433000L);
-	// debugOptimiseThis("38 ", sensor, 1263297788000L, 1263299480000L);
-	// debugOptimiseThis("39 ", sensor, 1263297788000L, 1263299527000L);
-	// debugOptimiseThis("40 ", sensor, 1263297788000L, 1263299574000L);
-	// debugOptimiseThis("41 ", sensor, 1263297788000L, 1263299621000L);
-	// debugOptimiseThis("42 ", sensor, 1263297788000L, 1263299668000L);
-	// debugOptimiseThis("43 ", sensor, 1263297788000L, 1263299715000L);
-	// debugOptimiseThis("44 ", sensor, 1263297788000L, 1263299762000L);
-	//
-	// }
+	public static int getEnd(int start, int end, int buffer, int index)
+	{
+		int res = -1;
+		int MIN_SIZE = 3;
+		int semiBuffer = buffer / 2;
 
-	// /**
-	// * @param sensor
-	// * @param start
-	// * @param end
-	// * @return
-	// */
-	// private static PointValuePair debugOptimiseThis(String name, Sensor sensor,
-	// long start, long end) {
-	// List<Double> bearings = sensor.extractBearings(start, end);
-	// List<Long> times = sensor.extractTimes(start, end);
-	//
-	// PointValuePair wholeLegOptimiser = optimiseThis(times, bearings,
-	// bearings.get(0));
-	//
-	// // look at the individual scores (though they're not of interest)
-	// double[] key = wholeLegOptimiser.getKey();
-	// System.out.println(name + " times:" + outDates(times) + " B:"
-	// + numF.format(key[0]) + " P:" + numF.format(key[1]) + " Q:"
-	// + numF.format(key[2]) + " Sum:" + wholeLegOptimiser.getValue());
-	//
-	// return wholeLegOptimiser;
-	// }
+		int earliestPossibleStartPoint = start + (MIN_SIZE - 1);
+
+		if (index - semiBuffer > earliestPossibleStartPoint)
+		{
+			res = index - semiBuffer - 1;
+		}
+		return res;
+	}
+
+	public static int getStart(int start, int end, int buffer, int index)
+	{
+		int res = -1;
+		int MIN_SIZE = 3;
+		int semiBuffer = buffer / 2;
+
+		int lastPossibleStartPoint = end - (MIN_SIZE - 1);
+
+		if (index + semiBuffer < lastPossibleStartPoint)
+		{
+			res = index + semiBuffer + 1;
+		}
+		return res;
+	}
+
+	public static class TestMe extends TestCase
+	{
+		public void testStartTimes()
+		{
+			assertEquals(2, 5 / 2);
+
+			assertEquals("correct", -1, getEnd(0, 15, 5, 0));
+			assertEquals("correct", -1, getEnd(0, 15, 5, 1));
+			assertEquals("correct", -1, getEnd(0, 15, 5, 2));
+			assertEquals("correct", -1, getEnd(0, 15, 5, 3));
+			assertEquals("correct", -1, getEnd(0, 15, 5, 4));
+			assertEquals("correct", 2, getEnd(0, 15, 5, 5));
+			assertEquals("correct", 3, getEnd(0, 15, 5, 6));
+			assertEquals("correct", 4, getEnd(0, 15, 5, 7));
+			assertEquals("correct", 5, getEnd(0, 15, 5, 8));
+			assertEquals("correct", 6, getEnd(0, 15, 5, 9));
+			assertEquals("correct", 7, getEnd(0, 15, 5, 10));
+			assertEquals("correct", 8, getEnd(0, 15, 5, 11));
+			assertEquals("correct", 9, getEnd(0, 15, 5, 12));
+			assertEquals("correct", 10, getEnd(0, 15, 5, 13));
+			assertEquals("correct", 11, getEnd(0, 15, 5, 14));
+			assertEquals("correct", 12, getEnd(0, 15, 5, 15));
+
+			assertEquals("correct", 3, getStart(0, 15, 5, 0));
+			assertEquals("correct", 4, getStart(0, 15, 5, 1));
+			assertEquals("correct", 5, getStart(0, 15, 5, 2));
+			assertEquals("correct", 6, getStart(0, 15, 5, 3));
+			assertEquals("correct", 7, getStart(0, 15, 5, 4));
+			assertEquals("correct", 8, getStart(0, 15, 5, 5));
+			assertEquals("correct", 9, getStart(0, 15, 5, 6));
+			assertEquals("correct", 10, getStart(0, 15, 5, 7));
+			assertEquals("correct", 11, getStart(0, 15, 5, 8));
+			assertEquals("correct", 12, getStart(0, 15, 5, 9));
+			assertEquals("correct", 13, getStart(0, 15, 5, 10));
+			assertEquals("correct", -1, getStart(0, 15, 5, 11));
+			assertEquals("correct", -1, getStart(0, 15, 5, 12));
+			assertEquals("correct", -1, getStart(0, 15, 5, 13));
+			assertEquals("correct", -1, getStart(0, 15, 5, 14));
+			assertEquals("correct", -1, getStart(0, 15, 5, 15));
+
+		}
+	}
 
 }
