@@ -35,6 +35,7 @@ import flanagan.math.MinimisationFunction;
 public class ZigDetector
 {
 
+	private static final double CONVERGE_TOLERANCE = 1e-5;
 	final static long tgL1start = 1263297600000L; // 12:00:00 GMT
 	final static long osL1start = 1263297741000L; // 12:02:21 GMT
 	final static long tgL1end = 1263300091000L; // 12:41:31 GMT 2010
@@ -65,10 +66,17 @@ public class ZigDetector
 		// ok, insert a grid
 		JPanel inGrid = new JPanel();
 		container.add(inGrid);
-		inGrid.setLayout(new GridLayout(1, 0));
+		GridLayout grid = new GridLayout(0, 2);
+		inGrid.setLayout(grid);
 
 		plotThis(inGrid, "Scen1");
 		plotThis(inGrid, "Scen2");
+		plotThis(inGrid, "Scen3");
+		plotThis(inGrid, "Scen4");
+		
+		if(inGrid.getComponentCount() == 1)
+			grid.setColumns(1);
+			  
 
 		frame.pack();
 
@@ -190,7 +198,7 @@ public class ZigDetector
 				valueMarkers, timeEnd);
 
 		// wrap the combined chart
-		ChartPanel cp = new ChartPanel(new JFreeChart("Results for " + scenario,
+		ChartPanel cp = new ChartPanel(new JFreeChart("Results for " + scenario + " Tol:" + CONVERGE_TOLERANCE,
 				JFreeChart.DEFAULT_TITLE_FONT, combinedPlot, true))
 		{
 
@@ -203,7 +211,7 @@ public class ZigDetector
 			@Transient
 			public Dimension getPreferredSize()
 			{
-				return new Dimension(1100, 800);
+				return new Dimension(1100, 400);
 			}
 
 		};
@@ -227,10 +235,10 @@ public class ZigDetector
 
 		// initial step sizes
 		double[] step =
-		{ 0.2D, 0.6D, 0.2D };
+		{ 0.2D, 0.3D, 0.3D };
 
 		// convergence tolerance
-		double ftol = 1e-5;
+		double ftol = CONVERGE_TOLERANCE;
 
 		// Nelder and Mead minimisation procedure
 		min.nelderMead(funct, start, step, ftol);
