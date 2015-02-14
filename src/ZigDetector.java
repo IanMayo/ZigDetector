@@ -137,14 +137,6 @@ public class ZigDetector
 
 			Double overallScore = wholeLegOptimiser.getMinimum();
 
-			final int BUFFER_REGION = 2; // the number of measurements to ignore
-			// whilst the target is turning
-
-			// how many points in this leg?
-			int thisLegSize = times.size();
-			int startIndex = 2;
-			int endIndex = thisLegSize - 3;
-
 			// create a placeholder for the overall score for this leg
 			TimeSeries straightBar = new TimeSeries("Whole " + thisLeg.getName(),
 					FixedMillisecond.class);
@@ -271,6 +263,7 @@ public class ZigDetector
 		double beforeScore = 0;
 		double afterScore = 0;
 
+		@SuppressWarnings("unused")
 		String msg = dateF.format(thisD);
 		
 		if (legOneEnd != -1)
@@ -313,6 +306,7 @@ public class ZigDetector
 		return sum;
 	}
 
+	@SuppressWarnings("unused")
 	private static String outDates(List<Long> times)
 	{
 		String res = dateF.format(times.get(0)) + "-"
