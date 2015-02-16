@@ -4,6 +4,7 @@
  * Modules such as apache commons maths libraries and Jfreechart are used for analysis and visualization
  */
 import java.awt.BorderLayout;
+import java.awt.Color;
 import java.awt.Container;
 import java.awt.Dimension;
 import java.awt.GridLayout;
@@ -94,16 +95,19 @@ public class ZigDetector
 		Track targetTrack = new Track("data/" + scenario + "_Target.csv");
 		Sensor sensor = new Sensor("data/" + scenario + "_Sensor.csv");
 
-		// Now, we have to slice the data into ownship legs
-		List<LegOfData> ownshipLegs = calculateLegs(ownshipTrack);
+		// slice the target legs, to help assess performance
+		List<LegOfData> targetLegs = calculateLegs(targetTrack);
+		
+		// Now, we have to slice the data into ownship legs		
+		List<LegOfData> ownshipLegs = calculateLegs(ownshipTrack);		
 		// ownshipLegs = ownshipLegs.subList(1, 2); // just play with the first leg
 
+		TimeSeriesCollection calcPQ = calculatePQ(ownshipTrack, targetTrack);
+		
 		// create the combined plot - where we show all our data
 		CombinedDomainXYPlot combinedPlot = Plotting.createPlot();
 
 		// ok create the plots of ownship & target tracks
-		Plotting.addOwnshipData(combinedPlot, "O/S ", ownshipTrack, ownshipLegs,
-				null, timeEnd);
 
 		// get ready to store the results runs
 		TimeSeriesCollection legResults = new TimeSeriesCollection();
@@ -186,8 +190,12 @@ public class ZigDetector
 		Plotting.addLegResults(combinedPlot, legResults, valueMarkers);
 
 		// show the target track (it contains the results)
-		Plotting.addOwnshipData(combinedPlot, "Tgt ", targetTrack, null,
-				valueMarkers, timeEnd);
+		Plotting.addOwnshipData(combinedPlot, "Tgt ",  ownshipTrack, ownshipLegs,
+				new Color(0f,0f,1.0f,0.2f), targetTrack, targetLegs,
+				new Color(1.0f,0f,0f,0.2f), valueMarkers, timeEnd);
+		
+//		Plotting.addOwnshipData(combinedPlot, "O/S ",, null, timeEnd);
+
 
 		// wrap the combined chart
 		ChartPanel cp = new ChartPanel(new JFreeChart("Results for " + scenario + " Tol:" + CONVERGE_TOLERANCE,
@@ -210,6 +218,22 @@ public class ZigDetector
 		container.add(cp, BorderLayout.CENTER);
 
 		// System.exit(0);
+	}
+
+	private static TimeSeriesCollection calculatePQ(Track ownship,
+			Track target)
+	{
+		TimeSeriesCollection ts = new TimeSeriesCollection();
+		TimeSeries p = new TimeSeries("P", FixedMillisecond.class);
+		TimeSeries q = new TimeSeries("P", FixedMillisecond.class);
+		ts.addSeries(p);
+		ts.addSeries(q);
+		
+		// ok, now loop through
+		double[] oCourse = ownship.getCourses();
+		double[] tCourse = target.getCourses();
+		
+		return null;
 	}
 
 	static Minimisation optimiseThis(List<Long> times, List<Double> bearings,
