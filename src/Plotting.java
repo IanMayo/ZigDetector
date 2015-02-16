@@ -62,11 +62,10 @@ public class Plotting {
 		return xyPlot;
 	}
 	
-	public static void addOwnshipData( CombinedDomainXYPlot parent, String title,
-			Track ownshipTrack, List<LegOfData> ownshipLegs, 
-			Color ownshipCol, 
-			Track tgtTrack, List<LegOfData> tgtLegs, 
-			Color tgtCol, 
+	public static void addOwnshipData( CombinedDomainXYPlot parent, Track ownshipTrack,
+			List<LegOfData> ownshipLegs, Color ownshipCol, 
+			Track tgtTrack, 
+			List<LegOfData> tgtLegs, Color tgtCol, 
 			List<Long> turnEstimates, 
 			final Long endTime) {
 
@@ -100,9 +99,9 @@ public class Plotting {
 		courseColl.addSeries(tCourse);
 		speedColl.addSeries(tSpeed);
 
-		final JFreeChart chart = ChartFactory.createTimeSeriesChart(title, // String
+		final JFreeChart chart = ChartFactory.createTimeSeriesChart(null, // String
 				"Time", // String timeAxisLabel
-				title + "Course", // String valueAxisLabel,
+				"Course", // String valueAxisLabel,
 				courseColl, // XYDataset dataset,
 				true, // include legend
 				true, // tooltips
@@ -114,20 +113,27 @@ public class Plotting {
 		final DateAxis axis = (DateAxis) xyPlot.getDomainAxis();
 		axis.setDateFormatOverride(new SimpleDateFormat("hh:mm:ss"));
 
-		final NumberAxis axis2 = new NumberAxis(title + "Speed");
+		final NumberAxis axis2 = new NumberAxis("Speed");
 		xyPlot.setRangeAxis(1, axis2);
 		xyPlot.setDataset(1, speedColl);
 		xyPlot.mapDatasetToRangeAxis(1, 1);
 
 		XYLineAndShapeRenderer lineRenderer1 = new XYLineAndShapeRenderer(true,
 				true);
-		lineRenderer1.setSeriesPaint(1, Color.blue);
-		lineRenderer1.setSeriesShape(1, ShapeUtilities.createDiagonalCross(2, 2));
-		lineRenderer1.setSeriesPaint(2, Color.red);
-		lineRenderer1.setSeriesPaint(3, Color.blue);
-		lineRenderer1.setSeriesPaint(4, Color.blue);
-		lineRenderer1.setSeriesShape(4, ShapeUtilities.createDiagonalCross(2, 2));
+		lineRenderer1.setSeriesPaint(0, Color.blue);
+		lineRenderer1.setSeriesPaint(1, Color.red);
+		lineRenderer1.setSeriesShape(0, ShapeUtilities.createUpTriangle(2f));
+		lineRenderer1.setSeriesShape(1, ShapeUtilities.createDownTriangle(2f));
+		XYLineAndShapeRenderer lineRenderer2 = new XYLineAndShapeRenderer(true,
+				true);
+		lineRenderer2.setSeriesPaint(0, Color.blue);
+		lineRenderer2.setSeriesPaint(1, Color.red);
+		lineRenderer2.setSeriesShape(0, ShapeUtilities.createDownTriangle(2f));
+		lineRenderer2.setSeriesShape(1, ShapeUtilities.createUpTriangle(2f));
+		
+		// ok, and store them
 		xyPlot.setRenderer(0, lineRenderer1);
+		xyPlot.setRenderer(1, lineRenderer2);
 		
 
 		// let's try the shading

@@ -116,8 +116,6 @@ public class ZigDetector
 		// get ready to store the fitted P & Q
 		TimeSeries fittedP = new TimeSeries("P-fit", FixedMillisecond.class);
 		TimeSeries fittedQ = new TimeSeries("Q-fit", FixedMillisecond.class);
-//		pqSeriesColl.addSeries(fittedP);
-//		pqSeriesColl.addSeries(fittedQ);
 		
 		List<Long> valueMarkers = new ArrayList<Long>();
 
@@ -194,9 +192,9 @@ public class ZigDetector
 		}
 
 		// show the track data (it contains the results)
-		Plotting.addOwnshipData(combinedPlot, "Tgt ",  ownshipTrack, ownshipLegs,
-				new Color(0f,0f,1.0f,0.2f), targetTrack, targetLegs,
-				new Color(1.0f,0f,0f,0.2f), valueMarkers, timeEnd);
+		Plotting.addOwnshipData(combinedPlot, ownshipTrack,  ownshipLegs, new Color(0f,0f,1.0f,0.2f),
+				targetTrack, targetLegs, new Color(1.0f,0f,0f,0.2f),
+				valueMarkers, timeEnd);
 
 		// insert the calculated P & Q
 		Plotting.addPQData(combinedPlot, "Calculated", pqSeriesColl, null);
