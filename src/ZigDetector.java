@@ -101,7 +101,7 @@ public class ZigDetector
 		
 		// Now, we have to slice the data into ownship legs		
 		List<LegOfData> ownshipLegs = calculateLegs(ownshipTrack);		
-		// ownshipLegs = ownshipLegs.subList(1, 2); // just play with the first leg
+		 ownshipLegs = ownshipLegs.subList(0, 1); // just play with the first leg
 		
 		// create the combined plot - where we show all our data
 		CombinedDomainXYPlot combinedPlot = Plotting.createPlot();
@@ -114,8 +114,15 @@ public class ZigDetector
 		TimeSeriesCollection pqSeriesColl = calculatePQ(ownshipTrack, targetTrack, ownshipLegs);
 
 		// get ready to store the fitted P & Q
-		TimeSeries fittedP = new TimeSeries("P-fit", FixedMillisecond.class);
-		TimeSeries fittedQ = new TimeSeries("Q-fit", FixedMillisecond.class);
+		TimeSeries fittedBeforeP = new TimeSeries("P-bef-fit", FixedMillisecond.class);
+		TimeSeries fittedBeforeQ = new TimeSeries("Q-bef-fit", FixedMillisecond.class);
+		TimeSeries fittedAfterP = new TimeSeries("P-aft-fit", FixedMillisecond.class);
+		TimeSeries fittedAfterQ = new TimeSeries("Q-aft-fit", FixedMillisecond.class);
+		
+		pqSeriesColl.addSeries(fittedBeforeP);
+		pqSeriesColl.addSeries(fittedBeforeQ);
+		pqSeriesColl.addSeries(fittedAfterP);
+		pqSeriesColl.addSeries(fittedAfterQ);
 		
 		List<Long> valueMarkers = new ArrayList<Long>();
 
@@ -173,7 +180,7 @@ public class ZigDetector
 				// int legTwoStart = legOneEnd + BUFFER_REGION;
 				// legTwoStart = Math.min(legTwoStart, endIndex - 4);
 
-				double sum = sliceLeg(legOneEnd, index, legTwoStart, bearings, times, fittedP, fittedQ);
+				double sum = sliceLeg(legOneEnd, index, legTwoStart, bearings, times, fittedBeforeP, fittedBeforeQ, fittedAfterP, fittedAfterQ);
 
 				thisSeries.add(new FixedMillisecond(times.get(index)), sum);
 				straightBar.add(new FixedMillisecond(times.get(index)), overallScore);
@@ -187,6 +194,9 @@ public class ZigDetector
 				}
 			}
 
+			// ok, decide if we should slice
+	//		System.out.println("leg: " + thisLeg.getName() + " whole:" + overallScore + " best slice:" + bestScore);
+			
 			valueMarkers.add(times.get(bestIndex));
 
 		}
@@ -248,7 +258,7 @@ public class ZigDetector
 		
 		int thisLeg = 0;
 		
-		for (int i = 0; i < tY.length; i++)
+		for (int i = 0; i < tY.length && thisLeg < ownshipLegs.size(); i++)
 		{
 			long thisT = oTimes[i];
 			
@@ -280,8 +290,6 @@ public class ZigDetector
 					
 					p.add(new FixedMillisecond(thisT), P);
 					q.add(new FixedMillisecond(thisT), Q);
-					
-
 				}
 				else
 				{
@@ -327,6 +335,8 @@ public class ZigDetector
 	 * @param times
 	 * @param fittedQ 
 	 * @param fittedP 
+	 * @param fittedAfterQ 
+	 * @param fittedAfterP 
 	 * @param overallScore
 	 *          the overall score for this leg
 	 * @param BUFFER_REGION
@@ -335,7 +345,7 @@ public class ZigDetector
 	 * @return
 	 */
 	private static double sliceLeg(final int legOneEnd, int trialIndex,
-			final int legTwoStart, List<Double> bearings, List<Long> times, TimeSeries fittedP, TimeSeries fittedQ)
+			final int legTwoStart, List<Double> bearings, List<Long> times, TimeSeries fittedBeforeP, TimeSeries fittedBeforeQ, TimeSeries fittedAfterP, TimeSeries fittedAfterQ)
 	{
 		List<Long> theseTimes = times;
 		List<Double> theseBearings = bearings;
@@ -360,8 +370,8 @@ public class ZigDetector
 			beforeScore = beforeOptimiser.getMinimum() / beforeTimes.size();
 			msg += " BEFORE:" + dateF.format(times.get(0))+"-"+dateF.format(times.get(legOneEnd)) + " ";
 			
-			fittedP.add(new FixedMillisecond(times.get(trialIndex)), beforeOptimiser.getParamValues()[1]);
-			fittedQ.add(new FixedMillisecond(times.get(trialIndex)), beforeOptimiser.getParamValues()[2]);			
+			fittedBeforeP.add(new FixedMillisecond(times.get(trialIndex)), beforeOptimiser.getParamValues()[1]);
+			fittedBeforeQ.add(new FixedMillisecond(times.get(trialIndex)), beforeOptimiser.getParamValues()[2]);			
 		}
 
 		if (legTwoStart != -1)
@@ -374,6 +384,9 @@ public class ZigDetector
 					afterBearings.get(0));
 			afterScore = afterOptimiser.getMinimum() / afterTimes.size();
 			msg += " AFTER:" + dateF.format(times.get(legTwoStart))+"-"+dateF.format(times.get(times.size()-1)) + " ";
+			
+			fittedAfterP.add(new FixedMillisecond(times.get(trialIndex)), afterOptimiser.getParamValues()[1]);
+			fittedAfterQ.add(new FixedMillisecond(times.get(trialIndex)), afterOptimiser.getParamValues()[2]);			
 		}
 
 		// find the total error sum
