@@ -26,6 +26,7 @@ import junit.framework.TestCase;
 import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
 import org.jfree.chart.plot.CombinedDomainXYPlot;
+import org.jfree.chart.plot.XYPlot;
 import org.jfree.data.time.FixedMillisecond;
 import org.jfree.data.time.TimeSeries;
 import org.jfree.data.time.TimeSeriesCollection;
@@ -70,10 +71,10 @@ public class ZigDetector
 		GridLayout grid = new GridLayout(0, 2);
 		inGrid.setLayout(grid);
 
-		plotThis(inGrid, "Scen1");
+	//	plotThis(inGrid, "Scen1");
 		plotThis(inGrid, "Scen2");
-		plotThis(inGrid, "Scen3");
-		plotThis(inGrid, "Scen4");
+	//	plotThis(inGrid, "Scen3");
+	//	plotThis(inGrid, "Scen4");
 		
 		if(inGrid.getComponentCount() == 1)
 			grid.setColumns(1);
@@ -101,8 +102,6 @@ public class ZigDetector
 		// Now, we have to slice the data into ownship legs		
 		List<LegOfData> ownshipLegs = calculateLegs(ownshipTrack);		
 		// ownshipLegs = ownshipLegs.subList(1, 2); // just play with the first leg
-
-		TimeSeriesCollection calcPQ = calculatePQ(ownshipTrack, targetTrack);
 		
 		// create the combined plot - where we show all our data
 		CombinedDomainXYPlot combinedPlot = Plotting.createPlot();
@@ -112,6 +111,14 @@ public class ZigDetector
 		// get ready to store the results runs
 		TimeSeriesCollection legResults = new TimeSeriesCollection();
 
+		TimeSeriesCollection pqSeriesColl = calculatePQ(ownshipTrack, targetTrack, ownshipLegs);
+
+		// get ready to store the fitted P & Q
+		TimeSeries fittedP = new TimeSeries("P-fit", FixedMillisecond.class);
+		TimeSeries fittedQ = new TimeSeries("Q-fit", FixedMillisecond.class);
+//		pqSeriesColl.addSeries(fittedP);
+//		pqSeriesColl.addSeries(fittedQ);
+		
 		List<Long> valueMarkers = new ArrayList<Long>();
 
 		// ok, work through the legs. In the absence of a Discrete Optimisation
@@ -168,7 +175,7 @@ public class ZigDetector
 				// int legTwoStart = legOneEnd + BUFFER_REGION;
 				// legTwoStart = Math.min(legTwoStart, endIndex - 4);
 
-				double sum = sliceLeg(legOneEnd, index, legTwoStart, bearings, times);
+				double sum = sliceLeg(legOneEnd, index, legTwoStart, bearings, times, fittedP, fittedQ);
 
 				thisSeries.add(new FixedMillisecond(times.get(index)), sum);
 				straightBar.add(new FixedMillisecond(times.get(index)), overallScore);
@@ -186,17 +193,17 @@ public class ZigDetector
 
 		}
 
-		// ok, also plot the leg attempts
-		Plotting.addLegResults(combinedPlot, legResults, valueMarkers);
-
-		// show the target track (it contains the results)
+		// show the track data (it contains the results)
 		Plotting.addOwnshipData(combinedPlot, "Tgt ",  ownshipTrack, ownshipLegs,
 				new Color(0f,0f,1.0f,0.2f), targetTrack, targetLegs,
 				new Color(1.0f,0f,0f,0.2f), valueMarkers, timeEnd);
+
+		// insert the calculated P & Q
+		Plotting.addPQData(combinedPlot, "Calculated", pqSeriesColl, null);
 		
-//		Plotting.addOwnshipData(combinedPlot, "O/S ",, null, timeEnd);
-
-
+		// ok, also plot the leg attempts
+		Plotting.addLegResults(combinedPlot, legResults, valueMarkers);
+		
 		// wrap the combined chart
 		ChartPanel cp = new ChartPanel(new JFreeChart("Results for " + scenario + " Tol:" + CONVERGE_TOLERANCE,
 				JFreeChart.DEFAULT_TITLE_FONT, combinedPlot, true))
@@ -211,29 +218,83 @@ public class ZigDetector
 			@Transient
 			public Dimension getPreferredSize()
 			{
-				return new Dimension(1100, 400);
+				return new Dimension(1100, 500);
 			}
 
 		};
 		container.add(cp, BorderLayout.CENTER);
-
-		// System.exit(0);
 	}
 
 	private static TimeSeriesCollection calculatePQ(Track ownship,
-			Track target)
+			Track target, List<LegOfData> ownshipLegs)
 	{
 		TimeSeriesCollection ts = new TimeSeriesCollection();
-		TimeSeries p = new TimeSeries("P", FixedMillisecond.class);
-		TimeSeries q = new TimeSeries("P", FixedMillisecond.class);
+		TimeSeries p = new TimeSeries("P-calc", FixedMillisecond.class);
+		TimeSeries q = new TimeSeries("Q-calc", FixedMillisecond.class);
 		ts.addSeries(p);
 		ts.addSeries(q);
 		
 		// ok, now loop through
-		double[] oCourse = ownship.getCourses();
-		double[] tCourse = target.getCourses();
+		long[] oTimes = ownship.getDates();
+		double[] oCourses = ownship.getCourses();
+		double[] oSpeeds = ownship.getSpeeds();
+		double[] tCourses = target.getCourses();
+		double[] tSpeeds = target.getSpeeds();
+
+		double[] oX = ownship.getX();		
+		double[] oY = ownship.getY();
+		double[] tX = target.getX();		
+		double[] tY = target.getY();
+
+		Double R0 = null; //lMath.sqrt(Math.pow(oX[0], 2)+Math.pow(oY[0], 2));		
 		
-		return null;
+		int thisLeg = 0;
+		
+		for (int i = 0; i < tY.length; i++)
+		{
+			long thisT = oTimes[i];
+			
+			// ok, are we in a leg?
+			if(thisT < ownshipLegs.get(thisLeg).getStart())
+			{
+				// ok, ignore
+			}
+			else
+			{
+				// see which leg we're in
+				if(thisT < ownshipLegs.get(thisLeg).getEnd())
+				{
+					// hey, we're in the zone! 
+					// do we know range zero?
+					if(R0 == null)
+					{
+						R0 = Math.sqrt(Math.pow(tX[i]-oX[i], 2)+Math.pow(tY[i]-oY[i], 2));
+					}
+					
+					// now for the other calcs
+					double xO = oSpeeds[i] * Math.sin(Math.toRadians(oCourses[i]));
+					double yO = oSpeeds[i] * Math.cos(Math.toRadians(oCourses[i]));
+					double xT = tSpeeds[i] * Math.sin(Math.toRadians(tCourses[i]));
+					double yT = tSpeeds[i] * Math.cos(Math.toRadians(tCourses[i]));
+					
+					double P = (xT - xO) / R0;
+					double Q = (yT - yO) / R0;
+					
+					p.add(new FixedMillisecond(thisT), P);
+					q.add(new FixedMillisecond(thisT), Q);
+					
+
+				}
+				else
+				{
+					// ok, we've passed the end of the previous leg!			
+					thisLeg ++;
+					R0 = null;
+				}
+			}
+		}
+		
+		return ts;
 	}
 
 	static Minimisation optimiseThis(List<Long> times, List<Double> bearings,
@@ -266,6 +327,8 @@ public class ZigDetector
 	 * @param trialIndex
 	 * @param bearings
 	 * @param times
+	 * @param fittedQ 
+	 * @param fittedP 
 	 * @param overallScore
 	 *          the overall score for this leg
 	 * @param BUFFER_REGION
@@ -274,7 +337,7 @@ public class ZigDetector
 	 * @return
 	 */
 	private static double sliceLeg(final int legOneEnd, int trialIndex,
-			final int legTwoStart, List<Double> bearings, List<Long> times)
+			final int legTwoStart, List<Double> bearings, List<Long> times, TimeSeries fittedP, TimeSeries fittedQ)
 	{
 		List<Long> theseTimes = times;
 		List<Double> theseBearings = bearings;
@@ -298,6 +361,9 @@ public class ZigDetector
 					beforeBearings.get(0));
 			beforeScore = beforeOptimiser.getMinimum() / beforeTimes.size();
 			msg += " BEFORE:" + dateF.format(times.get(0))+"-"+dateF.format(times.get(legOneEnd)) + " ";
+			
+			fittedP.add(new FixedMillisecond(times.get(trialIndex)), beforeOptimiser.getParamValues()[1]);
+			fittedQ.add(new FixedMillisecond(times.get(trialIndex)), beforeOptimiser.getParamValues()[2]);			
 		}
 
 		if (legTwoStart != -1)

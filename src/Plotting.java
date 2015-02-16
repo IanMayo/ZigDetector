@@ -35,6 +35,33 @@ public class Plotting {
         return plot;
 	}
 	
+	public static XYPlot addPQData(CombinedDomainXYPlot parent, String title, TimeSeriesCollection calculated, TimeSeriesCollection fitted)
+	{
+
+		final JFreeChart chart = ChartFactory.createTimeSeriesChart(title, // String
+				"Time", // String timeAxisLabel
+				title, // String valueAxisLabel,
+				calculated, // XYDataset dataset,
+				true, // include legend
+				false, // tooltips
+				false); // urls 
+
+		XYPlot xyPlot = (XYPlot) chart.getPlot();
+		xyPlot.setDomainCrosshairVisible(true);
+		xyPlot.setRangeCrosshairVisible(true);
+		final DateAxis axis = (DateAxis) xyPlot.getDomainAxis();
+		axis.setDateFormatOverride(new SimpleDateFormat("hh:mm:ss"));
+
+//		final NumberAxis axis2 = new NumberAxis(title + "Speed");
+//		xyPlot.setRangeAxis(1, axis2);
+//		xyPlot.setDataset(1, speedColl);
+//		xyPlot.mapDatasetToRangeAxis(1, 1);
+
+		parent.add(xyPlot);
+		
+		return xyPlot;
+	}
+	
 	public static void addOwnshipData( CombinedDomainXYPlot parent, String title,
 			Track ownshipTrack, List<LegOfData> ownshipLegs, 
 			Color ownshipCol, 
@@ -199,5 +226,16 @@ public class Plotting {
 			bst.setLabelTextAnchor(TextAnchor.BASELINE_RIGHT);
 			xyPlot.addDomainMarker(bst, Layer.BACKGROUND);
 		}
+	}
+
+	public static void addFittedData(XYPlot pqPlot, TimeSeriesCollection fittedPQ)
+	{
+		TimeSeriesCollection coll = (TimeSeriesCollection) pqPlot.getDataset();
+		for(int i=0;i<fittedPQ.getSeriesCount();i++)
+		{
+			TimeSeries thisS = fittedPQ.getSeries(i);
+			coll.addSeries(thisS);
+		}
+		
 	}
 }
