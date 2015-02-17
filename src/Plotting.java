@@ -35,7 +35,7 @@ public class Plotting {
         return plot;
 	}
 	
-	public static XYPlot addPQData(CombinedDomainXYPlot parent, String title, TimeSeriesCollection calculated, TimeSeriesCollection fitted)
+	public static XYPlot plotPQData(CombinedDomainXYPlot parent, String title, TimeSeriesCollection calculated, TimeSeriesCollection fitted)
 	{
 
 		final JFreeChart chart = ChartFactory.createTimeSeriesChart(title, // String
@@ -56,13 +56,101 @@ public class Plotting {
 //		xyPlot.setRangeAxis(1, axis2);
 //		xyPlot.setDataset(1, speedColl);
 //		xyPlot.mapDatasetToRangeAxis(1, 1);
+		
+		XYLineAndShapeRenderer lineRenderer1 = new XYLineAndShapeRenderer(true,
+				true);
+		xyPlot.setRenderer(lineRenderer1);
 
 		parent.add(xyPlot);
 		
 		return xyPlot;
 	}
 	
-	public static void addOwnshipData( CombinedDomainXYPlot parent, Track ownshipTrack,
+	public static void plotSingleVesselData( CombinedDomainXYPlot parent, String title,
+			Track ownshipTrack, List<LegOfData> ownshipLegs, Color transColor, Color color, List<Long> valueMarkers, final Long endTime) {
+
+		TimeSeriesCollection dataset1 = new TimeSeriesCollection();
+		TimeSeriesCollection dataset2 = new TimeSeriesCollection();
+
+		TimeSeries data1 = new TimeSeries(title + "Course", FixedMillisecond.class);
+		TimeSeries data2 = new TimeSeries(title + "Speed", FixedMillisecond.class);
+
+		double[] courses = ownshipTrack.getCourses();
+		double[] speeds = ownshipTrack.getSpeeds();
+		long[] times = ownshipTrack.getDates();
+
+		// obtain the data for the points
+		for (int i = 0; i < times.length; i++) {
+			long thisTime = times[i];
+			if(endTime == null || thisTime <= endTime)
+			{
+				data1.add(new FixedMillisecond(thisTime), courses[i]);
+				data2.add(new FixedMillisecond(thisTime), speeds[i]);
+			}
+		}
+		dataset1.addSeries(data1);
+		dataset2.addSeries(data2);
+
+		final JFreeChart chart = ChartFactory.createTimeSeriesChart(title, // String
+				"Time", // String timeAxisLabel
+				title + "Course", // String valueAxisLabel,
+				dataset1, // XYDataset dataset,
+				true, // include legend
+				true, // tooltips
+				false); // urls 
+
+		XYPlot xyPlot = (XYPlot) chart.getPlot();
+		xyPlot.setDomainCrosshairVisible(true);
+		xyPlot.setRangeCrosshairVisible(true);
+		final DateAxis axis = (DateAxis) xyPlot.getDomainAxis();
+		axis.setDateFormatOverride(new SimpleDateFormat("hh:mm:ss"));
+
+		final NumberAxis axis2 = new NumberAxis(title + "Speed");
+		xyPlot.setRangeAxis(1, axis2);
+		xyPlot.setDataset(1, dataset2);
+		xyPlot.mapDatasetToRangeAxis(1, 1);
+
+		XYLineAndShapeRenderer lineRenderer1 = new XYLineAndShapeRenderer(true,
+				true);
+		lineRenderer1.setSeriesPaint(0, color);
+		lineRenderer1.setSeriesShape(0, ShapeUtilities.createUpTriangle(2f));
+
+		XYLineAndShapeRenderer lineRenderer2 = new XYLineAndShapeRenderer(true,
+				true);
+		lineRenderer2.setSeriesPaint(0, color);
+		lineRenderer2.setSeriesShape(0, ShapeUtilities.createDownTriangle(2f));
+		
+		// ok, and store them
+		xyPlot.setRenderer(0, lineRenderer1);
+		xyPlot.setRenderer(1, lineRenderer2);
+		
+		// let's try the shading
+		if (ownshipLegs != null) {
+			Iterator<LegOfData> iter = ownshipLegs.iterator();
+			while (iter.hasNext()) {
+				LegOfData leg = (LegOfData) iter.next();
+				final Marker bst = new IntervalMarker(leg.getStart(),
+						leg.getEnd(), transColor, new BasicStroke(2.0f), null, null,
+						1.0f);
+				bst.setLabel(leg.getName());
+				bst.setLabelAnchor(RectangleAnchor.BOTTOM_RIGHT);
+				bst.setLabelFont(new Font("SansSerif", Font.ITALIC + Font.BOLD,
+						10));
+				bst.setLabelTextAnchor(TextAnchor.BASELINE_RIGHT);
+				xyPlot.addDomainMarker(bst, Layer.BACKGROUND);
+			}
+		}
+		
+		// let's try the shading
+		if (valueMarkers != null) {
+			plotMarkers(xyPlot, valueMarkers);
+		}
+		
+		parent.add(xyPlot);
+	}
+
+	
+	public static void plotCombinedVesselData( CombinedDomainXYPlot parent, Track ownshipTrack,
 			List<LegOfData> ownshipLegs, Color ownshipCol, 
 			Track tgtTrack, 
 			List<LegOfData> tgtLegs, Color tgtCol, 
@@ -209,7 +297,7 @@ public class Plotting {
 			plotMarkers(xyPlot, valueMarkers);
 		}
 		
-		xyPlot.getRenderer().setSeriesVisibleInLegend(false);
+		xyPlot.getRenderer().setSeriesVisibleInLegend(true);
 		
 		
 		parent.add(xyPlot);
@@ -234,14 +322,4 @@ public class Plotting {
 		}
 	}
 
-	public static void addFittedData(XYPlot pqPlot, TimeSeriesCollection fittedPQ)
-	{
-		TimeSeriesCollection coll = (TimeSeriesCollection) pqPlot.getDataset();
-		for(int i=0;i<fittedPQ.getSeriesCount();i++)
-		{
-			TimeSeries thisS = fittedPQ.getSeries(i);
-			coll.addSeries(thisS);
-		}
-		
-	}
 }
