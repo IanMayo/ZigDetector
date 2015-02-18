@@ -554,7 +554,7 @@ public class ZigDetector
 			List<Double> beforeBearings = theseBearings.subList(0, legOneEnd);
 			Minimisation beforeOptimiser = optimiseThis(beforeTimes, beforeBearings,
 					beforeBearings.get(0));
-			beforeScore = beforeOptimiser.getMinimum() / beforeTimes.size();
+			beforeScore = beforeOptimiser.getMinimum();
 			msg += " BEFORE:" + dateF.format(times.get(0)) + "-"
 					+ dateF.format(times.get(legOneEnd)) + " ";
 
@@ -572,7 +572,7 @@ public class ZigDetector
 					theseTimes.size() - 1);
 			Minimisation afterOptimiser = optimiseThis(afterTimes, afterBearings,
 					afterBearings.get(0));
-			afterScore = afterOptimiser.getMinimum() / afterTimes.size();
+			afterScore = afterOptimiser.getMinimum();
 			msg += " AFTER:" + dateF.format(times.get(legTwoStart)) + "-"
 					+ dateF.format(times.get(times.size() - 1)) + " ";
 
