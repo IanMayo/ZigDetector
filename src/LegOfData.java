@@ -1,7 +1,5 @@
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
 import java.util.Date;
-import java.util.List;
 
 
 /** class to store a leg of ownship data
@@ -11,7 +9,8 @@ import java.util.List;
  */
 public class LegOfData
 {
-	final List<Long> _times = new ArrayList<Long>();
+	long tStart = Long.MAX_VALUE;
+	long tEnd = Long.MIN_VALUE;
 	
 	final private String _myName;
 	
@@ -19,28 +18,35 @@ public class LegOfData
 	{
 		_myName = name;
 	}
+	public LegOfData(String name, long tStart2, long tEnd2)
+	{
+		this(name);
+		tStart = tStart2;
+		tEnd = tEnd2;
+	}
+	public boolean initialised()
+	{
+		return tStart != Long.MAX_VALUE;
+	}
 	public Long getEnd() {
-		return _times.get(_times.size()-1);
+		return tEnd;
 	}
 	public Long getStart() {
-		return _times.get(0);
+		return tStart;
 	}
 	public String getName() {
 		return _myName;
 	}
 	public void add(long time)
 	{
-		_times.add(time);
-	}
-	public int size()
-	{
-		return _times.size();
+		tStart = Math.min(tStart, time);
+		tEnd = Math.max(tEnd, time);
 	}
 	@Override
 	public String toString()
 	{
 		SimpleDateFormat sdf = new SimpleDateFormat("hh:mm:ss");
-		return getName() + " " + sdf.format(new Date(_times.get(0))) + "-" + sdf.format(new Date(_times.get(_times.size()-1)));
+		return getName() + " " + sdf.format(new Date(tStart)) + "-" + sdf.format(new Date(tEnd));
 	}
 	
 }
