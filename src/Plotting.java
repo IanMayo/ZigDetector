@@ -360,10 +360,11 @@ public class Plotting {
 		xyPlot.setDataset(1, scores);
 		xyPlot.mapDatasetToRangeAxis(1, 1);
 
-		XYLineAndShapeRenderer lineRenderer2 = new XYLineAndShapeRenderer(true,
-				false);
+		XYLineAndShapeRenderer lineRenderer2 = new XYLineAndShapeRenderer(false,
+				true);
 		xyPlot.setRenderer(1, lineRenderer2);
 		xyPlot.getRenderer().setSeriesVisibleInLegend(false);
+		lineRenderer2.setSeriesPaint(0, Color.green);
 
 
 	//	final NumberAxis rangeAxis = new LogarithmicAxis("Log(error)");

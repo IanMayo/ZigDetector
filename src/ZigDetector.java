@@ -154,7 +154,7 @@ public class ZigDetector
 		// get ready to store the results runs
 		TimeSeriesCollection legResults = new TimeSeriesCollection();
 		
-		TimeSeries rmsScores = new TimeSeries("RMS Scores", FixedMillisecond.class);
+		TimeSeries rmsScores = new TimeSeries("RMS Errors", FixedMillisecond.class);
 		legStorer.setRMSScores(rmsScores);
 
 		List<Long> turnMarkers = new ArrayList<Long>();
