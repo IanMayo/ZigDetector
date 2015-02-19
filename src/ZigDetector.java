@@ -37,6 +37,8 @@ import flanagan.math.MinimisationFunction;
 public class ZigDetector
 {
 
+	private static final int BUFFER_SIZE = 5;
+
 	// how much RMS error we require on the Atan Curve before we
 	// bother trying to slice the target leg
 	private static final double ZIG_THRESHOLD = 0.01;
@@ -69,11 +71,11 @@ public class ZigDetector
 
 		LegStorer legStorer = new LegStorer();
 
-		//plotThis(inGrid, "Scen1", legStorer);
+	//	plotThis(inGrid, "Scen1", legStorer);
 		// plotThis(inGrid, "Scen2a", legStorer);
-		// plotThis(inGrid, "Scen2b", legStorer);
-		 // plotThis(inGrid, "Scen3", legStorer);
-		 plotThis(inGrid, "Scen4", legStorer);
+		 plotThis(inGrid, "Scen2b", legStorer);
+	//	  plotThis(inGrid, "Scen3", legStorer);
+	//	 plotThis(inGrid, "Scen4", legStorer);
 
 		if (inGrid.getComponentCount() == 1)
 			grid.setColumns(1);
@@ -91,11 +93,11 @@ public class ZigDetector
 
 		public void storeLeg(String scenario, long tStart, long tEnd)
 		{
-			System.out.println(" Storing " + scenario + " : "
+			System.out.println("Storing " + scenario + " : "
 					+ dateF.format(new Date(tStart)) + " - "
 					+ dateF.format(new Date(tEnd)));
 
-			_legList.add(new LegOfData("n/a", tStart, tEnd));
+			_legList.add(new LegOfData("Leg-" + (_legList.size()+1), tStart, tEnd));
 		}
 
 		public void setLegList(ArrayList<LegOfData> legList)
@@ -122,8 +124,8 @@ public class ZigDetector
 
 		// Now, we have to slice the data into ownship legs
 		// List<LegOfData> targetLegs = calculateLegs(targetTrack);
-		List<LegOfData> ownshipLegs = calculateLegs(ownshipTrack);
-		// ownshipLegs = ownshipLegs.subList(0, 1); // just play with the first leg
+		List<LegOfData> ownshipLegs = identifyLegs(ownshipTrack);
+		 ownshipLegs = ownshipLegs.subList(1, 2); // just play with the first leg
 
 		// create the combined plot - where we show all our data
 		CombinedDomainXYPlot combinedPlot = Plotting.createPlot();
@@ -134,8 +136,6 @@ public class ZigDetector
 		List<Long> turnMarkers = new ArrayList<Long>();
 		legStorer.setLegList(new ArrayList<LegOfData>());
 		
-		
-
 		// ok, work through the legs. In the absence of a Discrete Optimisation
 		// algorithm we're taking a brue force approach.
 		// Hopefully Craig can find an optimised alternative to this.
@@ -143,28 +143,6 @@ public class ZigDetector
 				.hasNext();)
 		{
 			LegOfData thisLeg = (LegOfData) iterator.next();
-
-			// ok, slice the data for this leg
-			List<Double> bearings = sensor.extractBearings(thisLeg.getStart(),
-					thisLeg.getEnd());
-			List<Long> times = sensor.extractTimes(thisLeg.getStart(),
-					thisLeg.getEnd());
-
-			// find the error score for the overall leg
-			Minimisation wholeLegOptimiser = optimiseThis(times, bearings,
-					bearings.get(0));
-
-			System.out.println(scenario + " / " + thisLeg.getName() + " error:"
-					+ wholeLegOptimiser.getMinimum());
-
-			double legError = wholeLegOptimiser.getMinimum();
-
-			// aah, only bother slicing it if we have a large enough RMS error
-			if (legError < ZIG_THRESHOLD)
-			{
-				legStorer.storeLeg(scenario, thisLeg.getStart(), thisLeg.getEnd());
-				continue;
-			}
 
 			// ok, slice the data for this leg
 			sliceThis(scenario, thisLeg.getStart(), thisLeg.getEnd(), sensor,
@@ -175,20 +153,10 @@ public class ZigDetector
 					FixedMillisecond.class);
 			legResults.addSeries(atanBar);
 
-			// TimeSeries polyBar = new TimeSeries("RMS " + thisLeg.getName(),
-			// FixedMillisecond.class);
-			// legResults.addSeries(polyBar);
-
 			// create a placeholder for the individual time slice experiments
 			TimeSeries thisSeries = new TimeSeries(thisLeg.getName() + " Slices",
 					FixedMillisecond.class);
 			legResults.addSeries(thisSeries);
-
-			// ok, decide if we should slice
-			// System.out.println("leg: " + thisLeg.getName() + " whole:" +
-			// overallScore + " best slice:" + bestScore);
-
-			// turnMarkers.add(times.get(bestIndex));
 
 		}
 
@@ -200,6 +168,8 @@ public class ZigDetector
 		Plotting.plotSingleVesselData(combinedPlot, "Tgt", targetTrack, legStorer
 				.getLegs(), new Color(1.0f, 0f, 0f, 0.2f), new Color(1.0f, 0f, 0f),
 				turnMarkers, timeEnd);
+
+		Plotting.plotSensorData(combinedPlot, sensor.getTimes(), sensor.getBearings());
 
 		// insert the calculated P & Q
 //		Plotting.plotPQData(combinedPlot, "Calculated", pqSeriesColl, null);
@@ -238,7 +208,7 @@ public class ZigDetector
 	private static void sliceThis(String scenario, long curStart, long curEnd,
 			Sensor sensor, LegStorer legStorer)
 	{
-		System.out.println("Trying to slice : " + dateF.format(new Date(curStart))
+		System.out.println("  Trying to slice : " + dateF.format(new Date(curStart))
 				+ " - " + dateF.format(new Date(curEnd)) + " " + curStart + " to "
 				+ curEnd);
 
@@ -264,11 +234,14 @@ public class ZigDetector
 			long sliceTime = -1;
 
 			// find the optimal first slice
-			for (int index = 0; index < thisLegTimes.size(); index++)
+//			for (int index = 0; index < thisLegTimes.size(); index++)
+			for (int index = 12; index < 17; index++)
 			{
 				// what's the total score for slicing at this index?
 				double sum = sliceLeg(index, thisLegBearings, thisLegTimes);
 
+				System.out.println("score for:" + dateF.format(new Date(thisLegTimes.get(index))) + " is " +  sum);
+				
 				// is this better?
 				if ((sum > 0) && (sum < bestScore))
 				{
@@ -281,7 +254,7 @@ public class ZigDetector
 			// right, how did we get on?
 			if (sliceTime != -1)
 			{
-				System.out.println("Best slice at:" + dateF.format(new Date(sliceTime))
+				System.out.println("  Best slice at:" + dateF.format(new Date(sliceTime))
 						+ " score:" + bestScore);
 
 				// is this slice acceptable?
@@ -304,141 +277,6 @@ public class ZigDetector
 			}
 		}
 
-	}
-
-	@SuppressWarnings("unused")
-	private static double splineErrorfor(List<Long> times, List<Double> bearings,
-			Minimisation wholeLegOptimiser)
-	{
-		long startTime = times.get(0);
-
-		System.out.println("time, measured, spline");
-
-		double[] x = new double[times.size()];
-		double[] y = new double[times.size()];
-		for (int i = 0; i < times.size(); i++)
-		{
-			x[i] = (times.get(i) - startTime) / 1000d;
-			y[i] = bearings.get(i);
-		}
-
-		// ok, fit the spline
-		CubicSpline cs = new CubicSpline(x, y);
-
-		// PolyTrendLine pt = new PolyTrendLine();
-		// pt.setValues(y, x);
-
-		// and calculate the error sum
-		double runningSum = 0;
-
-		double[] keys = wholeLegOptimiser.getParamValues();
-
-		double B = keys[0];
-		double P = keys[1];
-		double Q = keys[2];
-
-		for (int i = 0; i < times.size(); i++)
-		{
-			long elapsedMillis = times.get(i) - startTime;
-			double elapsedSecs = elapsedMillis / 1000d;
-
-			double thisMeasured = bearings.get(i);
-			double thisForecast = cs.interpolate(elapsedSecs);
-			// double thisForecast = pt.predict(thisMeasured);
-			double thisError = Math.pow(thisForecast - thisMeasured, 2);
-			runningSum += thisError;
-		}
-
-		for (int i = 0; i < times.size(); i++)
-		{
-			x[i] = (times.get(i) - startTime) / 1000d;
-			y[i] = bearings.get(i);
-			// System.out.println(x[i] + ", " + y[i] + "," + pt.predict(x[i]));
-			System.out.println(x[i] + ", " + y[i] + "," + cs.interpolate(x[i]));
-		}
-
-		long start = times.get(0) / 1000;
-		long lastTime = times.get(times.size() - 1) / 1000;
-		for (long i = start; i < lastTime - 60; i += 60)
-		{
-			long thisT = i - start;
-			// System.out.println(thisT + ",0 ," + pt.predict(thisT));
-			System.out.println(thisT + ", ," + cs.interpolate(thisT));
-		}
-
-		return runningSum;
-	}
-
-	@SuppressWarnings("unused")
-	private static TimeSeriesCollection calculatePQ(Track ownship, Track target,
-			List<LegOfData> ownshipLegs)
-	{
-		TimeSeriesCollection ts = new TimeSeriesCollection();
-		TimeSeries p = new TimeSeries("P-calc", FixedMillisecond.class);
-		TimeSeries q = new TimeSeries("Q-calc", FixedMillisecond.class);
-		ts.addSeries(p);
-		ts.addSeries(q);
-
-		// ok, now loop through
-		long[] oTimes = ownship.getDates();
-		double[] oCourses = ownship.getCourses();
-		double[] oSpeeds = ownship.getSpeeds();
-		double[] tCourses = target.getCourses();
-		double[] tSpeeds = target.getSpeeds();
-
-		double[] oX = ownship.getX();
-		double[] oY = ownship.getY();
-		double[] tX = target.getX();
-		double[] tY = target.getY();
-
-		Double R0 = null; // lMath.sqrt(Math.pow(oX[0], 2)+Math.pow(oY[0], 2));
-
-		int thisLeg = 0;
-
-		for (int i = 0; i < tY.length && thisLeg < ownshipLegs.size(); i++)
-		{
-			long thisT = oTimes[i];
-
-			// ok, are we in a leg?
-			if (thisT < ownshipLegs.get(thisLeg).getStart())
-			{
-				// ok, ignore
-			}
-			else
-			{
-				// see which leg we're in
-				if (thisT < ownshipLegs.get(thisLeg).getEnd())
-				{
-					// hey, we're in the zone!
-					// do we know range zero?
-					if (R0 == null)
-					{
-						R0 = Math.sqrt(Math.pow(tX[i] - oX[i], 2)
-								+ Math.pow(tY[i] - oY[i], 2));
-					}
-
-					// now for the other calcs
-					double xO = oSpeeds[i] * Math.sin(Math.toRadians(oCourses[i]));
-					double yO = oSpeeds[i] * Math.cos(Math.toRadians(oCourses[i]));
-					double xT = tSpeeds[i] * Math.sin(Math.toRadians(tCourses[i]));
-					double yT = tSpeeds[i] * Math.cos(Math.toRadians(tCourses[i]));
-
-					double P = (xT - xO) / R0;
-					double Q = (yT - yO) / R0;
-
-					p.add(new FixedMillisecond(thisT), P);
-					q.add(new FixedMillisecond(thisT), Q);
-				}
-				else
-				{
-					// ok, we've passed the end of the previous leg!
-					thisLeg++;
-					R0 = null;
-				}
-			}
-		}
-
-		return ts;
 	}
 
 	static Minimisation optimiseThis(List<Long> times, List<Double> bearings,
@@ -485,8 +323,8 @@ public class ZigDetector
 			List<Long> times)
 	{
 
-		int legOneEnd = getEnd(0, times.size(), 5, trialIndex);
-		int legTwoStart = getStart(0, times.size(), 5, trialIndex);
+		int legOneEnd = getEnd(0, times.size(), BUFFER_SIZE, trialIndex);
+		int legTwoStart = getStart(0, times.size(), BUFFER_SIZE, trialIndex);
 
 		List<Long> theseTimes = times;
 		List<Double> theseBearings = bearings;
@@ -514,6 +352,7 @@ public class ZigDetector
 			beforeScore = beforeOptimiser.getMinimum();
 			msg += " BEFORE:" + dateF.format(times.get(0)) + "-"
 					+ dateF.format(times.get(legOneEnd)) + " ";
+			System.out.println(" before:" + _outDates(beforeTimes));
 		}
 
 		if (legTwoStart != -1)
@@ -527,6 +366,7 @@ public class ZigDetector
 			afterScore = afterOptimiser.getMinimum();
 			msg += " AFTER:" + dateF.format(times.get(legTwoStart)) + "-"
 					+ dateF.format(times.get(times.size() - 1)) + " ";
+			System.out.println(" after:" + _outDates(afterTimes));
 		}
 
 		// find the total error sum
@@ -547,14 +387,6 @@ public class ZigDetector
 		return sum;
 	}
 
-	@SuppressWarnings("unused")
-	private static String outDates(List<Long> times)
-	{
-		String res = dateF.format(times.get(0)) + "-"
-				+ dateF.format(times.get(times.size() - 1));
-		return res;
-	}
-
 	/**
 	 * slice this data into ownship legs, where the course and speed are
 	 * relatively steady
@@ -565,7 +397,7 @@ public class ZigDetector
 	 * @param elapsedTimes
 	 * @return
 	 */
-	private static List<LegOfData> calculateLegs(Track track)
+	private static List<LegOfData> identifyLegs(Track track)
 	{
 
 		final double COURSE_TOLERANCE = 0.1; // degs / sec (just a guess!!)
@@ -623,6 +455,36 @@ public class ZigDetector
 		return legs;
 	}
 
+	public static int getStart(int start, int end, int buffer, int index)
+	{
+		int res = -1;
+		int MIN_SIZE = 3;
+		int semiBuffer = buffer / 2;
+	
+		int lastPossibleStartPoint = end - (MIN_SIZE - 1);
+	
+		if (index + semiBuffer < lastPossibleStartPoint)
+		{
+			res = index + semiBuffer + 1;
+		}
+		return res;
+	}
+
+	public static int getEnd(int start, int end, int buffer, int index)
+	{
+		int res = -1;
+		int MIN_SIZE = 3;
+		int semiBuffer = buffer / 2;
+	
+		int earliestPossibleStartPoint = start + (MIN_SIZE - 1);
+	
+		if (index - semiBuffer > earliestPossibleStartPoint)
+		{
+			res = index - semiBuffer - 1;
+		}
+		return res;
+	}
+
 	private static class FlanaganArctan implements MinimisationFunction
 	{
 		final private List<Long> _times;
@@ -661,6 +523,149 @@ public class ZigDetector
 
 	}
 
+	@SuppressWarnings("unused")
+	private static double _splineErrorfor(List<Long> times, List<Double> bearings,
+			Minimisation wholeLegOptimiser)
+	{
+		long startTime = times.get(0);
+	
+		System.out.println("time, measured, spline");
+	
+		double[] x = new double[times.size()];
+		double[] y = new double[times.size()];
+		for (int i = 0; i < times.size(); i++)
+		{
+			x[i] = (times.get(i) - startTime) / 1000d;
+			y[i] = bearings.get(i);
+		}
+	
+		// ok, fit the spline
+		CubicSpline cs = new CubicSpline(x, y);
+	
+		// PolyTrendLine pt = new PolyTrendLine();
+		// pt.setValues(y, x);
+	
+		// and calculate the error sum
+		double runningSum = 0;
+	
+		double[] keys = wholeLegOptimiser.getParamValues();
+	
+		double B = keys[0];
+		double P = keys[1];
+		double Q = keys[2];
+	
+		for (int i = 0; i < times.size(); i++)
+		{
+			long elapsedMillis = times.get(i) - startTime;
+			double elapsedSecs = elapsedMillis / 1000d;
+	
+			double thisMeasured = bearings.get(i);
+			double thisForecast = cs.interpolate(elapsedSecs);
+			// double thisForecast = pt.predict(thisMeasured);
+			double thisError = Math.pow(thisForecast - thisMeasured, 2);
+			runningSum += thisError;
+		}
+	
+		for (int i = 0; i < times.size(); i++)
+		{
+			x[i] = (times.get(i) - startTime) / 1000d;
+			y[i] = bearings.get(i);
+			// System.out.println(x[i] + ", " + y[i] + "," + pt.predict(x[i]));
+			System.out.println(x[i] + ", " + y[i] + "," + cs.interpolate(x[i]));
+		}
+	
+		long start = times.get(0) / 1000;
+		long lastTime = times.get(times.size() - 1) / 1000;
+		for (long i = start; i < lastTime - 60; i += 60)
+		{
+			long thisT = i - start;
+			// System.out.println(thisT + ",0 ," + pt.predict(thisT));
+			System.out.println(thisT + ", ," + cs.interpolate(thisT));
+		}
+	
+		return runningSum;
+	}
+
+	private static double calcForecast(double B, double P, double Q,
+			double elapsedSecs)
+	{
+		double dX = Math.cos(Math.toRadians(B)) + Q * elapsedSecs;
+		double dY = Math.sin(Math.toRadians(B)) + P * elapsedSecs;
+		return Math.toDegrees(Math.atan2(dY, dX));
+	}
+
+	@SuppressWarnings("unused")
+	private static TimeSeriesCollection _calculatePQ(Track ownship, Track target,
+			List<LegOfData> ownshipLegs)
+	{
+		TimeSeriesCollection ts = new TimeSeriesCollection();
+		TimeSeries p = new TimeSeries("P-calc", FixedMillisecond.class);
+		TimeSeries q = new TimeSeries("Q-calc", FixedMillisecond.class);
+		ts.addSeries(p);
+		ts.addSeries(q);
+	
+		// ok, now loop through
+		long[] oTimes = ownship.getDates();
+		double[] oCourses = ownship.getCourses();
+		double[] oSpeeds = ownship.getSpeeds();
+		double[] tCourses = target.getCourses();
+		double[] tSpeeds = target.getSpeeds();
+	
+		double[] oX = ownship.getX();
+		double[] oY = ownship.getY();
+		double[] tX = target.getX();
+		double[] tY = target.getY();
+	
+		Double R0 = null; // lMath.sqrt(Math.pow(oX[0], 2)+Math.pow(oY[0], 2));
+	
+		int thisLeg = 0;
+	
+		for (int i = 0; i < tY.length && thisLeg < ownshipLegs.size(); i++)
+		{
+			long thisT = oTimes[i];
+	
+			// ok, are we in a leg?
+			if (thisT < ownshipLegs.get(thisLeg).getStart())
+			{
+				// ok, ignore
+			}
+			else
+			{
+				// see which leg we're in
+				if (thisT < ownshipLegs.get(thisLeg).getEnd())
+				{
+					// hey, we're in the zone!
+					// do we know range zero?
+					if (R0 == null)
+					{
+						R0 = Math.sqrt(Math.pow(tX[i] - oX[i], 2)
+								+ Math.pow(tY[i] - oY[i], 2));
+					}
+	
+					// now for the other calcs
+					double xO = oSpeeds[i] * Math.sin(Math.toRadians(oCourses[i]));
+					double yO = oSpeeds[i] * Math.cos(Math.toRadians(oCourses[i]));
+					double xT = tSpeeds[i] * Math.sin(Math.toRadians(tCourses[i]));
+					double yT = tSpeeds[i] * Math.cos(Math.toRadians(tCourses[i]));
+	
+					double P = (xT - xO) / R0;
+					double Q = (yT - yO) / R0;
+	
+					p.add(new FixedMillisecond(thisT), P);
+					q.add(new FixedMillisecond(thisT), Q);
+				}
+				else
+				{
+					// ok, we've passed the end of the previous leg!
+					thisLeg++;
+					R0 = null;
+				}
+			}
+		}
+	
+		return ts;
+	}
+
 	/**
 	 * @return a frame to contain the results
 	 */
@@ -690,36 +695,6 @@ public class ZigDetector
 				+ " Q:" + numF.format(key[2]) + " Sum:" + numF.format(res.getMinimum());
 
 		return out;
-	}
-
-	public static int getEnd(int start, int end, int buffer, int index)
-	{
-		int res = -1;
-		int MIN_SIZE = 3;
-		int semiBuffer = buffer / 2;
-
-		int earliestPossibleStartPoint = start + (MIN_SIZE - 1);
-
-		if (index - semiBuffer > earliestPossibleStartPoint)
-		{
-			res = index - semiBuffer - 1;
-		}
-		return res;
-	}
-
-	public static int getStart(int start, int end, int buffer, int index)
-	{
-		int res = -1;
-		int MIN_SIZE = 3;
-		int semiBuffer = buffer / 2;
-
-		int lastPossibleStartPoint = end - (MIN_SIZE - 1);
-
-		if (index + semiBuffer < lastPossibleStartPoint)
-		{
-			res = index + semiBuffer + 1;
-		}
-		return res;
 	}
 
 	public static class TestMe extends TestCase
@@ -765,16 +740,16 @@ public class ZigDetector
 		}
 	}
 
-	private static double calcForecast(double B, double P, double Q,
-			double elapsedSecs)
+	@SuppressWarnings("unused")
+	private static String _outDates(List<Long> times)
 	{
-		double dX = Math.cos(Math.toRadians(B)) + Q * elapsedSecs;
-		double dY = Math.sin(Math.toRadians(B)) + P * elapsedSecs;
-		return Math.toDegrees(Math.atan2(dY, dX));
+		String res = dateF.format(times.get(0)) + "-"
+				+ dateF.format(times.get(times.size() - 1));
+		return res;
 	}
 
 	@SuppressWarnings("unused")
-	private static double splineErrorfor2(List<Long> times,
+	private static double _splineErrorfor2(List<Long> times,
 			List<Double> bearings, Minimisation wholeLegOptimiser)
 	{
 		long startTime = times.get(0);
