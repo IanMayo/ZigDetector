@@ -323,8 +323,12 @@ public class Plotting {
 	}
 
 	public static void plotSensorData(CombinedDomainXYPlot parent,
-			long[] times, double[] bearings)
+			long[] times, double[] bearings, TimeSeries rmsScores)
 	{
+		
+		TimeSeriesCollection scores = new TimeSeriesCollection();
+		scores.addSeries(rmsScores);
+		
 		TimeSeriesCollection dataset = new TimeSeriesCollection();
 		TimeSeries bSeries = new TimeSeries("Bearings", FixedMillisecond.class);
 		dataset.addSeries(bSeries);
@@ -337,7 +341,7 @@ public class Plotting {
 				"Leg Results", // String
 								// title,
 				"Time", // String timeAxisLabel
-				"Errpr", // String valueAxisLabel,
+				"Bearing", // String valueAxisLabel,
 				dataset, // XYDataset dataset,
 				true, // include legend
 				true, // tooltips
@@ -348,6 +352,19 @@ public class Plotting {
 		xyPlot.setRangeCrosshairVisible(true);
 		final DateAxis axis = (DateAxis) xyPlot.getDomainAxis();
 		axis.setDateFormatOverride(new SimpleDateFormat("HH:mm:ss"));
+		
+		//	final NumberAxis rangeAxis = new LogarithmicAxis("Log(error)");
+		//	xyPlot.setRangeAxis(rangeAxis);
+		final NumberAxis axis2 = new LogarithmicAxis("RMS Error");
+		xyPlot.setRangeAxis(1, axis2);
+		xyPlot.setDataset(1, scores);
+		xyPlot.mapDatasetToRangeAxis(1, 1);
+
+		XYLineAndShapeRenderer lineRenderer2 = new XYLineAndShapeRenderer(true,
+				false);
+		xyPlot.setRenderer(1, lineRenderer2);
+		xyPlot.getRenderer().setSeriesVisibleInLegend(false);
+
 
 	//	final NumberAxis rangeAxis = new LogarithmicAxis("Log(error)");
 	//	xyPlot.setRangeAxis(rangeAxis);
@@ -355,7 +372,6 @@ public class Plotting {
 		XYLineAndShapeRenderer lineRenderer1 = new XYLineAndShapeRenderer(true,
 				true);
 		xyPlot.setRenderer(0, lineRenderer1);
-				
 		xyPlot.getRenderer().setSeriesVisibleInLegend(true);
 				
 		parent.add(xyPlot);	}
