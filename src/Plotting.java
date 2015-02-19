@@ -322,4 +322,42 @@ public class Plotting {
 		}
 	}
 
+	public static void plotSensorData(CombinedDomainXYPlot parent,
+			long[] times, double[] bearings)
+	{
+		TimeSeriesCollection dataset = new TimeSeriesCollection();
+		TimeSeries bSeries = new TimeSeries("Bearings", FixedMillisecond.class);
+		dataset.addSeries(bSeries);
+		for (int i = 0; i < bearings.length; i++)
+		{
+			bSeries.add(new FixedMillisecond(times[i]), bearings[i]);
+		}
+		
+		final JFreeChart chart = ChartFactory.createTimeSeriesChart(
+				"Leg Results", // String
+								// title,
+				"Time", // String timeAxisLabel
+				"Errpr", // String valueAxisLabel,
+				dataset, // XYDataset dataset,
+				true, // include legend
+				true, // tooltips
+				false); // urls
+
+		XYPlot xyPlot = (XYPlot) chart.getPlot();
+		xyPlot.setDomainCrosshairVisible(true);
+		xyPlot.setRangeCrosshairVisible(true);
+		final DateAxis axis = (DateAxis) xyPlot.getDomainAxis();
+		axis.setDateFormatOverride(new SimpleDateFormat("HH:mm:ss"));
+
+	//	final NumberAxis rangeAxis = new LogarithmicAxis("Log(error)");
+	//	xyPlot.setRangeAxis(rangeAxis);
+
+		XYLineAndShapeRenderer lineRenderer1 = new XYLineAndShapeRenderer(true,
+				true);
+		xyPlot.setRenderer(0, lineRenderer1);
+				
+		xyPlot.getRenderer().setSeriesVisibleInLegend(true);
+				
+		parent.add(xyPlot);	}
+
 }
