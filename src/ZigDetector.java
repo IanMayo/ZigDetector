@@ -25,6 +25,9 @@ import javax.swing.ImageIcon;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JSlider;
+import javax.swing.event.ChangeEvent;
+import javax.swing.event.ChangeListener;
 
 import junit.framework.TestCase;
 
@@ -60,6 +63,8 @@ public class ZigDetector
 	public static void main(String[] args) throws Exception
 	{
 
+		final ZigDetector detector = new ZigDetector();
+		
 		// capture the start time (used for time elapsed at the end)
 		long startTime = System.currentTimeMillis();
 
@@ -67,20 +72,24 @@ public class ZigDetector
 		final JFrame frame = createFrame();
 		frame.setLocation(600, 50);
 		Container container = frame.getContentPane();
-
+		
+		// create the control panel
+		
 		// ok, insert a grid
 		JPanel inGrid = new JPanel();
 		container.add(inGrid);
 		GridLayout grid = new GridLayout(0, 2);
 		inGrid.setLayout(grid);
 
+		inGrid.add(detector.createControls());
+		
 		LegStorer legStorer = new LegStorer();
 
-		plotThis(inGrid, "Scen1", legStorer);
+		detector.plotThis(inGrid, "Scen1", legStorer);
 		// plotThis(inGrid, "Scen2a", legStorer);
-		 plotThis(inGrid, "Scen2b", legStorer);
-		  plotThis(inGrid, "Scen3", legStorer);
-		 plotThis(inGrid, "Scen4", legStorer);
+//		detector.plotThis(inGrid, "Scen2b", legStorer);
+//		detector.plotThis(inGrid, "Scen3", legStorer);
+//		detector.plotThis(inGrid, "Scen4", legStorer);
 
 		if (inGrid.getComponentCount() == 1)
 			grid.setColumns(1);
@@ -112,8 +121,6 @@ public class ZigDetector
 				Long long1 = (Long) iterator.next();
 				_rmsScores.add(new FixedMillisecond(long1), rms);
 			}
-			
-			
 		}
 		
 		public void setRMSScores(TimeSeries series)
@@ -132,7 +139,7 @@ public class ZigDetector
 		}
 	}
 
-	public static void plotThis(Container container, String scenario,
+	public void plotThis(Container container, String scenario,
 			LegStorer legStorer) throws Exception
 	{
 
@@ -227,6 +234,51 @@ public class ZigDetector
 //		 JLabel wIcon = new JLabel(new ImageIcon(wPic));
 //		 container.add(wIcon, BorderLayout.SOUTH);
 
+	}
+
+	protected JPanel createControls()
+	{
+		JPanel panel = new JPanel();
+		panel.setLayout(new GridLayout(0,1));
+		
+		ValConverter conv = new ValConverter(){
+
+			@Override
+			public double convert(int input)
+			{
+				return input * 1000;
+			}};
+		
+		panel.add(createItem("Noise SD", 0, 100, conv));
+		panel.add(createItem("RMS Error", 0, 100, conv));
+		panel.add(createItem("B,Q Threshold", 0, 100, conv));
+		
+		return panel;
+	}
+	
+	protected static interface ValConverter
+	{
+		public double convert(int input);
+	}
+	
+	protected JPanel createItem(String label, int min, int max, final ValConverter conv)
+	{
+		final JSlider slider = new JSlider(min, max);
+		JPanel panel = new JPanel();
+		panel.setLayout(new BorderLayout());
+		panel.add(slider, BorderLayout.CENTER);
+		panel.add(new JLabel(label), BorderLayout.WEST);
+		final JLabel txtLbl = new JLabel("0.00");
+		panel.add(txtLbl, BorderLayout.EAST);
+		slider.addChangeListener(new ChangeListener()
+		{
+			@Override
+			public void stateChanged(ChangeEvent e)
+			{
+				txtLbl.setText(""+ conv.convert(slider.getValue()));
+			}
+		});
+		return panel;
 	}
 
 	private static void sliceThis(String scenario, long curStart, long curEnd,
@@ -838,5 +890,4 @@ public class ZigDetector
 		// done
 		return root;
 	}
-
 }
