@@ -3,10 +3,12 @@
  *A project to determine the Linear regression for maritime analytic using java
  * Modules such as apache commons maths libraries and Jfreechart are used for analysis and visualization
  */
+import java.awt.BasicStroke;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Container;
 import java.awt.Dimension;
+import java.awt.Font;
 import java.awt.GridLayout;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
@@ -16,7 +18,9 @@ import java.io.File;
 import java.text.DecimalFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 
@@ -34,9 +38,15 @@ import junit.framework.TestCase;
 import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
 import org.jfree.chart.plot.CombinedDomainXYPlot;
+import org.jfree.chart.plot.Marker;
+import org.jfree.chart.plot.ValueMarker;
+import org.jfree.chart.plot.XYPlot;
 import org.jfree.data.time.FixedMillisecond;
 import org.jfree.data.time.TimeSeries;
 import org.jfree.data.time.TimeSeriesCollection;
+import org.jfree.ui.Layer;
+import org.jfree.ui.RectangleAnchor;
+import org.jfree.ui.TextAnchor;
 
 import flanagan.interpolation.CubicSpline;
 import flanagan.math.Minimisation;
@@ -80,12 +90,148 @@ public class ZigDetector
 		container.add(inGrid);
 		GridLayout grid = new GridLayout(0, 2);
 		inGrid.setLayout(grid);
-
-		inGrid.add(detector.createControls());
 		
-		LegStorer legStorer = new LegStorer();
+		final HashMap<String, ScenDataset> datasets = new HashMap<String, ScenDataset>();
 
-		detector.plotThis(inGrid, "Scen1", legStorer);
+		
+		// handler for slider changes
+		NewValueListener newL = new NewValueListener()
+		{
+
+			@Override
+			public void newValue(double val)
+			{
+				// create the ownship & target course data
+				Iterator<ScenDataset> iterator = datasets.values().iterator();
+				while(iterator.hasNext())
+				{
+					// create somewhere to store it.
+					ScenDataset data = iterator.next();
+					
+					// clear the identified legs - to show progress
+					Plotting.clearLegMarkers(data.targetPlot);
+					
+					data.turnMarkers = new ArrayList<Long>();
+
+					// get ready to store the new legs
+					data.legStorer = new LegStorer();
+
+					// get ready to store the results runs
+					TimeSeriesCollection legResults = new TimeSeriesCollection();
+					
+					TimeSeries rmsScores = new TimeSeries("RMS Errors", FixedMillisecond.class);
+					data.legStorer.setRMSScores(rmsScores);
+					data.legStorer.setLegList(new ArrayList<LegOfData>());
+										
+					// ok, work through the legs. In the absence of a Discrete Optimisation
+					// algorithm we're taking a brue force approach.
+					// Hopefully Craig can find an optimised alternative to this.
+					for (Iterator<LegOfData> iterator2 = data.ownshipLegs.iterator(); iterator2
+							.hasNext();)
+					{
+						LegOfData thisLeg = (LegOfData) iterator2.next();
+
+						// ok, slice the data for this leg
+						sliceThis(data._name, thisLeg.getStart(), thisLeg.getEnd(), data.sensor,
+								data.legStorer);
+
+						// create a placeholder for the overall score for this leg
+						TimeSeries atanBar = new TimeSeries("ATan " + thisLeg.getName(),
+								FixedMillisecond.class);
+						legResults.addSeries(atanBar);
+
+						// create a placeholder for the individual time slice experiments
+						TimeSeries thisSeries = new TimeSeries(thisLeg.getName() + " Slices",
+								FixedMillisecond.class);
+						legResults.addSeries(thisSeries);
+					}
+					
+					// ok, output the results
+					Plotting.plotLegPeriods(data.targetPlot, data.tgtTransColor, data.legStorer._legList);
+				}
+			}			
+		};
+
+		// - ok insert the grid controls
+		inGrid.add(detector.createControls(newL));
+		
+		ArrayList<String> scenarios = new ArrayList<String>();
+		scenarios.add("Scen1");
+	//	scenarios.add("Scen3");
+		
+		// create the placeholders
+		for (Iterator<String> iterator = scenarios.iterator(); iterator.hasNext();)
+		{
+			String name = (String) iterator.next();
+
+			// create somewhere to store it.
+			ScenDataset data = new ScenDataset(name);
+
+			// store it
+			datasets.put(name, data);
+
+			// ok - create the placeholder
+			CombinedDomainXYPlot combinedPlot = Plotting.createPlot();			
+			data._plot  =  combinedPlot;
+			
+			ChartPanel cp = new ChartPanel(new JFreeChart("Results for " + name
+					+ " Tol:" + CONVERGE_TOLERANCE, JFreeChart.DEFAULT_TITLE_FONT,
+					combinedPlot, true))
+			{
+
+				/**
+						 * 
+						 */
+				private static final long serialVersionUID = 1L;
+
+				@Override
+				@Transient
+				public Dimension getPreferredSize()
+				{
+					return new Dimension(700, 500);
+				}
+
+			};
+			inGrid.add(cp, BorderLayout.CENTER);
+		}
+		
+		// create the ownship & target course data
+		Iterator<ScenDataset> iterator = datasets.values().iterator();
+		while(iterator.hasNext())
+		{
+			// create somewhere to store it.
+			ScenDataset data = iterator.next();
+			
+			// load the data
+			data.ownshipTrack = new Track("data/" + data._name + "_Ownship.csv");
+			data.targetTrack = new Track("data/" + data._name + "_Target.csv");
+			data.sensor = new Sensor("data/" + data._name + "_Sensor.csv");
+			
+			// find the ownship legs
+			data.ownshipLegs = identifyLegs(data.ownshipTrack);
+
+			// ok, now for the ownship data
+			data.oShipColor = new Color(0f, 0f, 1.0f);
+			data.oShipTransColor = new Color(0f, 0f, 1.0f, 0.2f);
+			data.ownshipPlot = Plotting.plotSingleVesselData(data._plot, "O/S", data.ownshipTrack,
+					data.oShipColor,
+					null, timeEnd);
+			
+			// ok, now for the ownship legs
+			Plotting.plotLegPeriods(data.ownshipPlot, data.oShipTransColor, data.ownshipLegs);
+
+			// and the target plot
+			data.tgtColor = new Color(1.0f, 0f, 0f);
+			data.tgtTransColor = new Color(1.0f, 0f, 0f, 0.2f);
+			data.targetPlot =  Plotting.plotSingleVesselData(data._plot, "Tgt", data.targetTrack, data.tgtColor,
+					null, timeEnd);			
+		}
+		
+
+		
+		
+		
+//		detector.plotThis(inGrid, "Scen1", legStorer);
 		// plotThis(inGrid, "Scen2a", legStorer);
 //		detector.plotThis(inGrid, "Scen2b", legStorer);
 //		detector.plotThis(inGrid, "Scen3", legStorer);
@@ -100,11 +246,36 @@ public class ZigDetector
 		System.out.println("Elapsed:" + elapsed / 1000 + " secs");
 
 	}
+	
+	public static class ScenDataset
+	{
+		public Color tgtTransColor;
+		public Color tgtColor;
+		public Color oShipColor;
+		public Color oShipTransColor;
+		protected ArrayList<Long> turnMarkers;
+		protected LegStorer legStorer;
+		public XYPlot targetPlot;
+		public XYPlot ownshipPlot;
+		public List<LegOfData> ownshipLegs;
+		private String _name;
+		CombinedDomainXYPlot _plot;
+		public Track ownshipTrack;
+		public Track targetTrack;
+		public Sensor sensor;
+
+		public ScenDataset(String name)
+		{
+			_name = name;
+		}
+
+	}
+	
 
 	public static class LegStorer
 	{
 		private ArrayList<LegOfData> _legList;
-		private TimeSeries _rmsScores;
+		private TimeSeries _rmsScores ;
 
 		public void storeLeg(String scenario, long tStart, long tEnd, Sensor sensor, double rms)
 		{
@@ -193,12 +364,11 @@ public class ZigDetector
 
 		// show the track data (it contains the results)
 		Plotting.plotSingleVesselData(combinedPlot, "O/S", ownshipTrack,
-				ownshipLegs, new Color(0f, 0f, 1.0f, 0.2f), new Color(0f, 0f, 1.0f),
+				new Color(0f, 0f, 1.0f),
 				null, timeEnd);
 
-		Plotting.plotSingleVesselData(combinedPlot, "Tgt", targetTrack, legStorer
-				.getLegs(), new Color(1.0f, 0f, 0f, 0.2f), new Color(1.0f, 0f, 0f),
-				turnMarkers, timeEnd);
+		Plotting.plotSingleVesselData(combinedPlot, "Tgt", targetTrack, new Color(1.0f, 0f, 0f),
+				null, timeEnd);
 
 		Plotting.plotSensorData(combinedPlot, sensor.getTimes(), sensor.getBearings(), rmsScores);
 
@@ -236,22 +406,21 @@ public class ZigDetector
 
 	}
 
-	protected JPanel createControls()
+	protected JPanel createControls(NewValueListener  newListener)
 	{
 		JPanel panel = new JPanel();
 		panel.setLayout(new GridLayout(0,1));
 		
 		ValConverter conv = new ValConverter(){
-
 			@Override
 			public double convert(int input)
 			{
 				return input * 1000;
 			}};
 		
-		panel.add(createItem("Noise SD", 0, 100, conv));
-		panel.add(createItem("RMS Error", 0, 100, conv));
-		panel.add(createItem("B,Q Threshold", 0, 100, conv));
+		panel.add(createItem("Noise SD", 0, 100, conv, newListener));
+		panel.add(createItem("RMS Error", 0, 100, conv, newListener));
+		panel.add(createItem("B,Q Threshold", 0, 100, conv, newListener));
 		
 		return panel;
 	}
@@ -261,7 +430,12 @@ public class ZigDetector
 		public double convert(int input);
 	}
 	
-	protected JPanel createItem(String label, int min, int max, final ValConverter conv)
+	protected static interface NewValueListener
+	{
+		public void newValue(double val);
+	}
+	
+	protected JPanel createItem(String label, int min, int max, final ValConverter conv, final NewValueListener listener)
 	{
 		final JSlider slider = new JSlider(min, max);
 		JPanel panel = new JPanel();
@@ -275,7 +449,14 @@ public class ZigDetector
 			@Override
 			public void stateChanged(ChangeEvent e)
 			{
-				txtLbl.setText(""+ conv.convert(slider.getValue()));
+				
+				double newValue = conv.convert(slider.getValue());
+				txtLbl.setText(""+ newValue);
+				if(!slider.getValueIsAdjusting())
+				{
+					// ok, fire a new event
+					listener.newValue(newValue);
+				}
 			}
 		});
 		return panel;

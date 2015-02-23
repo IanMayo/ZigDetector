@@ -2,6 +2,7 @@ import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Font;
 import java.text.SimpleDateFormat;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 
@@ -24,18 +25,21 @@ import org.jfree.ui.RectangleAnchor;
 import org.jfree.ui.TextAnchor;
 import org.jfree.util.ShapeUtilities;
 
-public class Plotting {
+public class Plotting
+{
 
 	public static CombinedDomainXYPlot createPlot()
 	{
-		final CombinedDomainXYPlot plot = new CombinedDomainXYPlot(new DateAxis("Domain"));
-        plot.setGap(10.0);
+		final CombinedDomainXYPlot plot = new CombinedDomainXYPlot(new DateAxis(
+				"Domain"));
+		plot.setGap(10.0);
 		final DateAxis axis = (DateAxis) plot.getDomainAxis();
 		axis.setDateFormatOverride(new SimpleDateFormat("HH:mm:ss"));
-        return plot;
+		return plot;
 	}
-	
-	public static XYPlot plotPQData(CombinedDomainXYPlot parent, String title, TimeSeriesCollection calculated, TimeSeriesCollection fitted)
+
+	public static XYPlot plotPQData(CombinedDomainXYPlot parent, String title,
+			TimeSeriesCollection calculated, TimeSeriesCollection fitted)
 	{
 
 		final JFreeChart chart = ChartFactory.createTimeSeriesChart(title, // String
@@ -44,7 +48,7 @@ public class Plotting {
 				calculated, // XYDataset dataset,
 				true, // include legend
 				false, // tooltips
-				false); // urls 
+				false); // urls
 
 		XYPlot xyPlot = (XYPlot) chart.getPlot();
 		xyPlot.setDomainCrosshairVisible(true);
@@ -52,22 +56,24 @@ public class Plotting {
 		final DateAxis axis = (DateAxis) xyPlot.getDomainAxis();
 		axis.setDateFormatOverride(new SimpleDateFormat("HH:mm:ss"));
 
-//		final NumberAxis axis2 = new NumberAxis(title + "Speed");
-//		xyPlot.setRangeAxis(1, axis2);
-//		xyPlot.setDataset(1, speedColl);
-//		xyPlot.mapDatasetToRangeAxis(1, 1);
-		
+		// final NumberAxis axis2 = new NumberAxis(title + "Speed");
+		// xyPlot.setRangeAxis(1, axis2);
+		// xyPlot.setDataset(1, speedColl);
+		// xyPlot.mapDatasetToRangeAxis(1, 1);
+
 		XYLineAndShapeRenderer lineRenderer1 = new XYLineAndShapeRenderer(true,
 				true);
 		xyPlot.setRenderer(lineRenderer1);
 
 		parent.add(xyPlot);
-		
+
 		return xyPlot;
 	}
-	
-	public static void plotSingleVesselData( CombinedDomainXYPlot parent, String title,
-			Track ownshipTrack, List<LegOfData> ownshipLegs, Color transColor, Color color, List<Long> valueMarkers, final Long endTime) {
+
+	public static XYPlot plotSingleVesselData(CombinedDomainXYPlot parent,
+			String title, Track ownshipTrack, Color color, List<Long> valueMarkers,
+			final Long endTime)
+	{
 
 		TimeSeriesCollection dataset1 = new TimeSeriesCollection();
 		TimeSeriesCollection dataset2 = new TimeSeriesCollection();
@@ -80,9 +86,10 @@ public class Plotting {
 		long[] times = ownshipTrack.getDates();
 
 		// obtain the data for the points
-		for (int i = 0; i < times.length; i++) {
+		for (int i = 0; i < times.length; i++)
+		{
 			long thisTime = times[i];
-			if(endTime == null || thisTime <= endTime)
+			if (endTime == null || thisTime <= endTime)
 			{
 				data1.add(new FixedMillisecond(thisTime), courses[i]);
 				data2.add(new FixedMillisecond(thisTime), speeds[i]);
@@ -97,7 +104,7 @@ public class Plotting {
 				dataset1, // XYDataset dataset,
 				true, // include legend
 				true, // tooltips
-				false); // urls 
+				false); // urls
 
 		XYPlot xyPlot = (XYPlot) chart.getPlot();
 		xyPlot.setDomainCrosshairVisible(true);
@@ -119,43 +126,46 @@ public class Plotting {
 				true);
 		lineRenderer2.setSeriesPaint(0, color);
 		lineRenderer2.setSeriesShape(0, ShapeUtilities.createDownTriangle(2f));
-		
+
 		// ok, and store them
 		xyPlot.setRenderer(0, lineRenderer1);
 		xyPlot.setRenderer(1, lineRenderer2);
-		
-		// let's try the shading
-		if (ownshipLegs != null) {
-			Iterator<LegOfData> iter = ownshipLegs.iterator();
-			while (iter.hasNext()) {
-				LegOfData leg = (LegOfData) iter.next();
-				final Marker bst = new IntervalMarker(leg.getStart(),
-						leg.getEnd(), transColor, new BasicStroke(2.0f), null, null,
-						1.0f);
-				bst.setLabel(leg.getName());
-				bst.setLabelAnchor(RectangleAnchor.BOTTOM_RIGHT);
-				bst.setLabelFont(new Font("SansSerif", Font.ITALIC + Font.BOLD,
-						10));
-				bst.setLabelTextAnchor(TextAnchor.BASELINE_RIGHT);
-				xyPlot.addDomainMarker(bst, Layer.BACKGROUND);
-			}
-		}
-		
-		// let's try the shading
-		if (valueMarkers != null) {
-			plotMarkers(xyPlot, valueMarkers);
-		}
-		
+
 		parent.add(xyPlot);
+
+		return xyPlot;
 	}
 
-	
-	public static void plotCombinedVesselData( CombinedDomainXYPlot parent, Track ownshipTrack,
-			List<LegOfData> ownshipLegs, Color ownshipCol, 
-			Track tgtTrack, 
-			List<LegOfData> tgtLegs, Color tgtCol, 
-			List<Long> turnEstimates, 
-			final Long endTime) {
+	/**
+	 * @param xyPlot
+	 * @param transColor
+	 * @param ownshipLegs
+	 */
+	public static void plotLegPeriods(XYPlot xyPlot, Color transColor,
+			List<LegOfData> ownshipLegs)
+	{
+		// clear any domain markesr
+		xyPlot.clearDomainMarkers();
+
+		Iterator<LegOfData> iter = ownshipLegs.iterator();
+		while (iter.hasNext())
+		{
+			LegOfData leg = (LegOfData) iter.next();
+			final Marker bst = new IntervalMarker(leg.getStart(), leg.getEnd(),
+					transColor, new BasicStroke(2.0f), null, null, 1.0f);
+			bst.setLabel(leg.getName());
+			bst.setLabelAnchor(RectangleAnchor.BOTTOM_RIGHT);
+			bst.setLabelFont(new Font("SansSerif", Font.ITALIC + Font.BOLD, 10));
+			bst.setLabelTextAnchor(TextAnchor.BASELINE_RIGHT);
+			xyPlot.addDomainMarker(bst, Layer.BACKGROUND);
+		}
+	}
+
+	public static void plotCombinedVesselData(CombinedDomainXYPlot parent,
+			Track ownshipTrack, List<LegOfData> ownshipLegs, Color ownshipCol,
+			Track tgtTrack, List<LegOfData> tgtLegs, Color tgtCol,
+			List<Long> turnEstimates, final Long endTime)
+	{
 
 		TimeSeriesCollection courseColl = new TimeSeriesCollection();
 		TimeSeriesCollection speedColl = new TimeSeriesCollection();
@@ -172,9 +182,10 @@ public class Plotting {
 		double[] tSpeeds = tgtTrack.getSpeeds();
 
 		// obtain the data for the points
-		for (int i = 0; i < oTimes.length; i++) {
+		for (int i = 0; i < oTimes.length; i++)
+		{
 			long thisTime = oTimes[i];
-			if(endTime == null || thisTime <= endTime)
+			if (endTime == null || thisTime <= endTime)
 			{
 				oCourse.add(new FixedMillisecond(thisTime), oCourses[i]);
 				oSpeed.add(new FixedMillisecond(thisTime), oSpeeds[i]);
@@ -193,7 +204,7 @@ public class Plotting {
 				courseColl, // XYDataset dataset,
 				true, // include legend
 				true, // tooltips
-				false); // urls 
+				false); // urls
 
 		XYPlot xyPlot = (XYPlot) chart.getPlot();
 		xyPlot.setDomainCrosshairVisible(true);
@@ -218,60 +229,37 @@ public class Plotting {
 		lineRenderer2.setSeriesPaint(1, Color.red);
 		lineRenderer2.setSeriesShape(0, ShapeUtilities.createDownTriangle(2f));
 		lineRenderer2.setSeriesShape(1, ShapeUtilities.createUpTriangle(2f));
-		
+
 		// ok, and store them
 		xyPlot.setRenderer(0, lineRenderer1);
 		xyPlot.setRenderer(1, lineRenderer2);
-		
 
 		// let's try the shading
-		if (ownshipLegs != null) {
-			Iterator<LegOfData> iter = ownshipLegs.iterator();
-			while (iter.hasNext()) {
-				LegOfData leg = (LegOfData) iter.next();
-				final Marker bst = new IntervalMarker(leg.getStart(),
-						leg.getEnd(), ownshipCol, new BasicStroke(2.0f), null, null,
-						1.0f);
-				bst.setLabel(leg.getName());
-				bst.setLabelAnchor(RectangleAnchor.BOTTOM_RIGHT);
-				bst.setLabelFont(new Font("SansSerif", Font.ITALIC + Font.BOLD,
-						10));
-				bst.setLabelTextAnchor(TextAnchor.BASELINE_RIGHT);
-				xyPlot.addDomainMarker(bst, Layer.BACKGROUND);
-			}
+		if (ownshipLegs != null)
+		{
+			plotLegPeriods(xyPlot, ownshipCol, ownshipLegs);
 		}
-		
-		if (tgtLegs != null) {
-			Iterator<LegOfData> iter = tgtLegs.iterator();
-			while (iter.hasNext()) {
-				LegOfData leg = (LegOfData) iter.next();
-				final Marker bst = new IntervalMarker(leg.getStart(),
-						leg.getEnd(), tgtCol, new BasicStroke(2.0f), null, null,
-						1.0f);
-				bst.setLabel(leg.getName());
-				bst.setLabelAnchor(RectangleAnchor.BOTTOM_RIGHT);
-				bst.setLabelFont(new Font("SansSerif", Font.ITALIC + Font.BOLD,
-						10));
-				bst.setLabelTextAnchor(TextAnchor.BASELINE_RIGHT);
-				xyPlot.addDomainMarker(bst, Layer.BACKGROUND);
-			}
+
+		if (tgtLegs != null)
+		{
+			plotLegPeriods(xyPlot, tgtCol, tgtLegs);
 		}
-		
-		
-		
+
 		// let's try the shading
-		if (turnEstimates != null) {
+		if (turnEstimates != null)
+		{
 			plotMarkers(xyPlot, turnEstimates);
 		}
-		
+
 		parent.add(xyPlot);
 	}
 
-	public static void addLegResults( CombinedDomainXYPlot parent, TimeSeriesCollection errorValues, List<Long> valueMarkers) {
+	public static void addLegResults(CombinedDomainXYPlot parent,
+			TimeSeriesCollection errorValues, List<Long> valueMarkers)
+	{
 
-		final JFreeChart chart = ChartFactory.createTimeSeriesChart(
-				"Leg Results", // String
-								// title,
+		final JFreeChart chart = ChartFactory.createTimeSeriesChart("Leg Results", // String
+				// title,
 				"Time", // String timeAxisLabel
 				"Errpr", // String valueAxisLabel,
 				errorValues, // XYDataset dataset,
@@ -291,44 +279,46 @@ public class Plotting {
 		XYLineAndShapeRenderer lineRenderer1 = new XYLineAndShapeRenderer(true,
 				true);
 		xyPlot.setRenderer(0, lineRenderer1);
-		
+
 		// let's try the shading
-		if (valueMarkers != null) {
+		if (valueMarkers != null)
+		{
 			plotMarkers(xyPlot, valueMarkers);
 		}
-		
+
 		xyPlot.getRenderer().setSeriesVisibleInLegend(true);
-		
-		
+
 		parent.add(xyPlot);
 	}
 
-	/**  Plot a series of vertical markers
+	/**
+	 * Plot a series of vertical markers
+	 * 
 	 * @param xyPlot
 	 * @param valueMarkers
 	 */
-	private static void plotMarkers(XYPlot xyPlot, List<Long> valueMarkers) {
+	public static void plotMarkers(XYPlot xyPlot, List<Long> valueMarkers)
+	{
 		Iterator<Long> iter = valueMarkers.iterator();
-		while (iter.hasNext()) {
+		while (iter.hasNext())
+		{
 			Long leg = (Long) iter.next();
-			final Marker bst = new ValueMarker(leg,
-					Color.gray, new BasicStroke(3.0f), null, null,
-					1.0f);
+			final Marker bst = new ValueMarker(leg, Color.gray,
+					new BasicStroke(3.0f), null, null, 1.0f);
 			bst.setLabelAnchor(RectangleAnchor.BOTTOM_RIGHT);
-			bst.setLabelFont(new Font("SansSerif", Font.ITALIC + Font.BOLD,
-					10));
+			bst.setLabelFont(new Font("SansSerif", Font.ITALIC + Font.BOLD, 10));
 			bst.setLabelTextAnchor(TextAnchor.BASELINE_RIGHT);
 			xyPlot.addDomainMarker(bst, Layer.BACKGROUND);
 		}
 	}
 
-	public static void plotSensorData(CombinedDomainXYPlot parent,
-			long[] times, double[] bearings, TimeSeries rmsScores)
+	public static void plotSensorData(CombinedDomainXYPlot parent, long[] times,
+			double[] bearings, TimeSeries rmsScores)
 	{
-		
+
 		TimeSeriesCollection scores = new TimeSeriesCollection();
 		scores.addSeries(rmsScores);
-		
+
 		TimeSeriesCollection dataset = new TimeSeriesCollection();
 		TimeSeries bSeries = new TimeSeries("Bearings", FixedMillisecond.class);
 		dataset.addSeries(bSeries);
@@ -336,10 +326,9 @@ public class Plotting {
 		{
 			bSeries.add(new FixedMillisecond(times[i]), bearings[i]);
 		}
-		
-		final JFreeChart chart = ChartFactory.createTimeSeriesChart(
-				"Leg Results", // String
-								// title,
+
+		final JFreeChart chart = ChartFactory.createTimeSeriesChart("Leg Results", // String
+				// title,
 				"Time", // String timeAxisLabel
 				"Bearing", // String valueAxisLabel,
 				dataset, // XYDataset dataset,
@@ -352,9 +341,9 @@ public class Plotting {
 		xyPlot.setRangeCrosshairVisible(true);
 		final DateAxis axis = (DateAxis) xyPlot.getDomainAxis();
 		axis.setDateFormatOverride(new SimpleDateFormat("HH:mm:ss"));
-		
-		//	final NumberAxis rangeAxis = new LogarithmicAxis("Log(error)");
-		//	xyPlot.setRangeAxis(rangeAxis);
+
+		// final NumberAxis rangeAxis = new LogarithmicAxis("Log(error)");
+		// xyPlot.setRangeAxis(rangeAxis);
 		final NumberAxis axis2 = new LogarithmicAxis("RMS Error");
 		xyPlot.setRangeAxis(1, axis2);
 		xyPlot.setDataset(1, scores);
@@ -366,15 +355,20 @@ public class Plotting {
 		xyPlot.getRenderer().setSeriesVisibleInLegend(false);
 		lineRenderer2.setSeriesPaint(0, Color.green);
 
-
-	//	final NumberAxis rangeAxis = new LogarithmicAxis("Log(error)");
-	//	xyPlot.setRangeAxis(rangeAxis);
+		// final NumberAxis rangeAxis = new LogarithmicAxis("Log(error)");
+		// xyPlot.setRangeAxis(rangeAxis);
 
 		XYLineAndShapeRenderer lineRenderer1 = new XYLineAndShapeRenderer(true,
 				true);
 		xyPlot.setRenderer(0, lineRenderer1);
 		xyPlot.getRenderer().setSeriesVisibleInLegend(true);
-				
-		parent.add(xyPlot);	}
+
+		parent.add(xyPlot);
+	}
+
+	public static void clearLegMarkers(XYPlot xyPlot)
+	{
+		xyPlot.clearDomainMarkers();
+	}
 
 }
