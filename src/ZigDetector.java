@@ -89,6 +89,11 @@ public class ZigDetector
 
 		final HashMap<String, ScenDataset> datasets = new HashMap<String, ScenDataset>();
 
+		ArrayList<String> scenarios = new ArrayList<String>();
+//		scenarios.add("Scen1");
+		scenarios.add("Scen3");
+
+
 		// handler for slider changes
 		NewValueListener newL = new NewValueListener()
 		{
@@ -132,7 +137,12 @@ public class ZigDetector
 
 					// get ready to store the new legs
 					data.legStorer = new LegStorer();
+					
+					// apply the error to the sensor data
+					data.sensor.applyError(BRG_ERROR_SD);
 
+				//	System.exit(0);
+					
 					// get ready to store the results runs
 					TimeSeriesCollection legResults = new TimeSeriesCollection();
 
@@ -172,10 +182,6 @@ public class ZigDetector
 
 		// - ok insert the grid controls
 		inGrid.add(detector.createControls(newL));
-
-		ArrayList<String> scenarios = new ArrayList<String>();
-		scenarios.add("Scen1");
-		scenarios.add("Scen3");
 
 		// create the placeholders
 		for (Iterator<String> iterator = scenarios.iterator(); iterator.hasNext();)
@@ -471,7 +477,7 @@ public class ZigDetector
 		NumberFormat decFormat = new DecimalFormat("0.0000");
 		NumberFormat expFormat = new DecimalFormat("0.000E00");
 
-		panel.add(createItem(NOISE_SD_STR, 0, 100, conv20, newListener, decFormat, BRG_ERROR_SD));
+		panel.add(createItem(NOISE_SD_STR, 0, 200, conv20, newListener, decFormat, BRG_ERROR_SD));
 		panel.add(createItem(OPTIMISER_THRESHOLD_STR, -30, -1, logConv, newListener,
 				expFormat, OPTIMISER_TOLERANCE));
 		panel.add(createItem(RMS_ZIG_ERROR_STR, 0, 500, conv10000, newListener,
