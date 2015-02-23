@@ -2,7 +2,6 @@ import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Font;
 import java.text.SimpleDateFormat;
-import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 
@@ -78,8 +77,8 @@ public class Plotting
 		TimeSeriesCollection dataset1 = new TimeSeriesCollection();
 		TimeSeriesCollection dataset2 = new TimeSeriesCollection();
 
-		TimeSeries data1 = new TimeSeries(title + "Course", FixedMillisecond.class);
-		TimeSeries data2 = new TimeSeries(title + "Speed", FixedMillisecond.class);
+		TimeSeries data1 = new TimeSeries(title + "Course");
+		TimeSeries data2 = new TimeSeries(title + "Speed");
 
 		double[] courses = ownshipTrack.getCourses();
 		double[] speeds = ownshipTrack.getSpeeds();
@@ -170,10 +169,10 @@ public class Plotting
 		TimeSeriesCollection courseColl = new TimeSeriesCollection();
 		TimeSeriesCollection speedColl = new TimeSeriesCollection();
 
-		TimeSeries oCourse = new TimeSeries("O/S Course", FixedMillisecond.class);
-		TimeSeries oSpeed = new TimeSeries("O/S Speed", FixedMillisecond.class);
-		TimeSeries tCourse = new TimeSeries("Tgt Course", FixedMillisecond.class);
-		TimeSeries tSpeed = new TimeSeries("Tgt Speed", FixedMillisecond.class);
+		TimeSeries oCourse = new TimeSeries("O/S Course");
+		TimeSeries oSpeed = new TimeSeries("O/S Speed");
+		TimeSeries tCourse = new TimeSeries("Tgt Course");
+		TimeSeries tSpeed = new TimeSeries("Tgt Speed");
 
 		double[] oCourses = ownshipTrack.getCourses();
 		double[] oSpeeds = ownshipTrack.getSpeeds();
@@ -261,7 +260,7 @@ public class Plotting
 		final JFreeChart chart = ChartFactory.createTimeSeriesChart("Leg Results", // String
 				// title,
 				"Time", // String timeAxisLabel
-				"Errpr", // String valueAxisLabel,
+				"Error", // String valueAxisLabel,
 				errorValues, // XYDataset dataset,
 				true, // include legend
 				true, // tooltips
@@ -320,7 +319,7 @@ public class Plotting
 		scores.addSeries(rmsScores);
 
 		TimeSeriesCollection dataset = new TimeSeriesCollection();
-		TimeSeries bSeries = new TimeSeries("Bearings", FixedMillisecond.class);
+		TimeSeries bSeries = new TimeSeries("Bearings");
 		dataset.addSeries(bSeries);
 		for (int i = 0; i < bearings.length; i++)
 		{
