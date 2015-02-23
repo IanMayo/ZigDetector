@@ -351,7 +351,7 @@ public class Plotting
 		XYLineAndShapeRenderer lineRenderer2 = new XYLineAndShapeRenderer(false,
 				true);
 		xyPlot.setRenderer(1, lineRenderer2);
-		xyPlot.getRenderer().setSeriesVisibleInLegend(false);
+		xyPlot.getRenderer().setBaseSeriesVisibleInLegend(false);
 		lineRenderer2.setSeriesPaint(0, Color.green);
 
 		// final NumberAxis rangeAxis = new LogarithmicAxis("Log(error)");
@@ -360,7 +360,7 @@ public class Plotting
 		XYLineAndShapeRenderer lineRenderer1 = new XYLineAndShapeRenderer(true,
 				true);
 		xyPlot.setRenderer(0, lineRenderer1);
-		xyPlot.getRenderer().setSeriesVisibleInLegend(true);
+		xyPlot.getRenderer().setBaseSeriesVisibleInLegend(true);
 
 		parent.add(xyPlot);
 	}
