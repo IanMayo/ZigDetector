@@ -20,10 +20,11 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 
+import javax.swing.ButtonGroup;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
-import javax.swing.JSlider;
+import javax.swing.JRadioButton;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 
@@ -60,7 +61,7 @@ public class ZigDetector
 	private static double OPTIMISER_TOLERANCE = 1e-6;
 
 	// the error we add on
-	private static double BRG_ERROR_SD = 0;
+	private static double BRG_ERROR_SD = 0.5;
 
 	final static Long timeEnd = null; // osL1end;
 
@@ -430,57 +431,13 @@ public class ZigDetector
 		JPanel panel = new JPanel();
 		panel.setLayout(new GridLayout(0, 1));
 
-		ValConverter conv20 = new ValConverter()
-		{
-			@Override
-			public double convert(int input)
-			{
-				return input / 20d;
-			}
-			
-			@Override
-			public int unConvert(double val)
-			{
-				return (int)(val * 20d);
-			}
-		};
-
-		ValConverter conv10000 = new ValConverter()
-		{
-			@Override
-			public double convert(int input)
-			{
-				return input / 10000d;
-			}
-			
-			@Override
-			public int unConvert(double val)
-			{
-				return (int)(val * 10000d);
-			}
-		};
-
-		ValConverter logConv = new ValConverter()
-		{
-			@Override
-			public double convert(int input)
-			{
-				return Math.pow(10, input);
-			}
-			@Override
-			public int unConvert(double val)
-			{
-				return (int)(Math.log10(val));
-			}
-		};
-
 		NumberFormat decFormat = new DecimalFormat("0.0000");
 		NumberFormat expFormat = new DecimalFormat("0.000E00");
 
-		panel.add(createItem(NOISE_SD_STR, 0, 200, conv20, newListener, decFormat, BRG_ERROR_SD));
-		panel.add(createItem(OPTIMISER_THRESHOLD_STR, -30, -1, logConv, newListener,
+		panel.add(createItem(NOISE_SD_STR, new double[]{0d, 0.5, 2d}, newListener, decFormat, BRG_ERROR_SD));
+		panel.add(createItem(OPTIMISER_THRESHOLD_STR, new double[]{1e-3, 1e-4, 1e-5, 1e-6, 1e-7}, newListener,
 				expFormat, OPTIMISER_TOLERANCE));
-		panel.add(createItem(RMS_ZIG_ERROR_STR, 0, 500, conv10000, newListener,
+		panel.add(createItem(RMS_ZIG_ERROR_STR, new double[]{0.05, 0.005, 0.0005}, newListener,
 				decFormat, RMS_ZIG_THRESHOLD));
 
 		return panel;
@@ -498,36 +455,43 @@ public class ZigDetector
 		public void newValue(String attribute, double val);
 	}
 
-	protected JPanel createItem(final String label, int min, int max,
-			final ValConverter conv, final NewValueListener listener,
+	protected JPanel createItem(final String label, final double[] values, final NewValueListener listener,
 			final NumberFormat numberFormat, double startValue)
 	{
-		final JSlider slider = new JSlider(min, max);
-		
-		System.out.println(label + " Start value:" + startValue +" unConv:" + conv.unConvert(startValue) + " conv:" + conv.convert(conv.unConvert(startValue)));
-		
-		slider.setValue(conv.unConvert(startValue));
-		JPanel panel = new JPanel();
-		panel.setLayout(new BorderLayout());
-		panel.add(slider, BorderLayout.CENTER);
-		panel.add(new JLabel(label), BorderLayout.WEST);
-		final JLabel txtLbl = new JLabel(numberFormat.format(conv.convert(slider.getValue())));
-		panel.add(txtLbl, BorderLayout.EAST);		
-		slider.addChangeListener(new ChangeListener()
-		{
-			@Override
-			public void stateChanged(ChangeEvent e)
-			{
 
-				double newValue = conv.convert(slider.getValue());
-				txtLbl.setText("" + numberFormat.format(newValue));
-				if (!slider.getValueIsAdjusting())
+	JPanel panel = new JPanel();
+	panel.setLayout(new BorderLayout());
+	panel.add(new JLabel(label), BorderLayout.WEST);
+
+		JPanel buttons = new JPanel();
+		buttons.setLayout(new GridLayout(1, 0));
+		ButtonGroup bg = new ButtonGroup();
+		for (int i = 0; i < values.length; i++)
+		{
+			final JRadioButton newB = new JRadioButton();
+			final double thisD = values[i];
+			newB.setText(numberFormat.format(values[i]));
+			if(thisD == startValue)
+				newB.setSelected(true);
+			newB.addChangeListener(new ChangeListener()
+			{
+				
+				@Override
+				public void stateChanged(ChangeEvent e)
 				{
-					// ok, fire a new event
-					listener.newValue(label, newValue);
+					if(newB.isSelected())
+					{
+						listener.newValue(label, thisD);
+					}
 				}
-			}
-		});
+			});
+			buttons.add(newB);
+			bg.add(newB);
+		}
+		
+		panel.add(buttons, BorderLayout.EAST);		
+		
+		
 		return panel;
 	}
 
@@ -631,9 +595,18 @@ public class ZigDetector
 
 						bufferLen++;
 					}
-
-					// do we have enough left to bother with?
-					sliceThis(scenario, curStart, curEnd, sensor, legStorer);
+					
+					// ok, did we find anything?
+					if(found)
+					{
+						// ok, we'll automatically move along
+						sliceThis(scenario, curStart, curEnd, sensor, legStorer);
+					}
+					else
+					{
+						// right - it's damn impossible!  force it to move along
+						
+					}
 				}
 			}
 			else
