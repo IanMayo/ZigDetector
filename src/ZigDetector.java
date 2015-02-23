@@ -44,9 +44,9 @@ import flanagan.math.MinimisationFunction;
 public class ZigDetector
 {
 
-	private static final String B_Q_THRESHOLD_STR = "B,Q Threshold";
+	private static final String OPTIMISER_THRESHOLD_STR = "Optim Thresh";
 
-	private static final String RMS_ERROR_STR = "RMS Error";
+	private static final String RMS_ZIG_ERROR_STR = "RMS Zig Error";
 
 	private static final String NOISE_SD_STR = "Noise SD";
 
@@ -54,10 +54,10 @@ public class ZigDetector
 
 	// how much RMS error we require on the Atan Curve before we
 	// bother trying to slice the target leg
-	private static double ZIG_THRESHOLD = 0.005;
+	private static double RMS_ZIG_THRESHOLD = 0.005;
 
 	// when to let the optimiser relax
-	private static double CONVERGE_TOLERANCE = 1e-6;
+	private static double OPTIMISER_TOLERANCE = 1e-6;
 
 	// the error we add on
 	private static double BRG_ERROR_SD = 0;
@@ -101,12 +101,14 @@ public class ZigDetector
 				case NOISE_SD_STR:
 					BRG_ERROR_SD = val;
 					break;
-				case RMS_ERROR_STR:
-					ZIG_THRESHOLD = val;
+				case RMS_ZIG_ERROR_STR:
+					RMS_ZIG_THRESHOLD = val;
 					break;
-				case B_Q_THRESHOLD_STR:
-					CONVERGE_TOLERANCE = val;
+				case OPTIMISER_THRESHOLD_STR:
+					OPTIMISER_TOLERANCE = val;
 					break;
+				default:
+					// don't worry - we make it empty to force a refresh
 				}
 
 				// create the ownship & target course data
@@ -114,7 +116,7 @@ public class ZigDetector
 				while (iterator.hasNext())
 				{
 					// create somewhere to store it.
-					ScenDataset data = iterator.next();
+					final ScenDataset data = iterator.next();
 
 					// clear the identified legs - to show progress
 					Plotting.clearLegMarkers(data.targetPlot);
@@ -122,8 +124,8 @@ public class ZigDetector
 					// update the title
 					NumberFormat numF = new DecimalFormat("0.###E0");
 					String title = data._name + " Noise:" + numF.format(BRG_ERROR_SD)
-							+ " Conv:" + numF.format(CONVERGE_TOLERANCE) + " Zig:"
-							+ numF.format(ZIG_THRESHOLD);
+							+ " Conv:" + numF.format(OPTIMISER_TOLERANCE) + " Zig:"
+							+ numF.format(RMS_ZIG_THRESHOLD);
 					data.chartPanel.getChart().setTitle(title);
 
 					data.turnMarkers = new ArrayList<Long>();
@@ -191,7 +193,7 @@ public class ZigDetector
 			data._plot = combinedPlot;
 
 			data.chartPanel = new ChartPanel(new JFreeChart("Results for " + name
-					+ " Tol:" + CONVERGE_TOLERANCE, JFreeChart.DEFAULT_TITLE_FONT,
+					+ " Tol:" + OPTIMISER_TOLERANCE, JFreeChart.DEFAULT_TITLE_FONT,
 					combinedPlot, true))
 			{
 
@@ -391,7 +393,7 @@ public class ZigDetector
 
 		// wrap the combined chart
 		ChartPanel cp = new ChartPanel(new JFreeChart("Results for " + scenario
-				+ " Tol:" + CONVERGE_TOLERANCE, JFreeChart.DEFAULT_TITLE_FONT,
+				+ " Tol:" + OPTIMISER_TOLERANCE, JFreeChart.DEFAULT_TITLE_FONT,
 				combinedPlot, true))
 		{
 
@@ -422,12 +424,33 @@ public class ZigDetector
 		JPanel panel = new JPanel();
 		panel.setLayout(new GridLayout(0, 1));
 
-		ValConverter conv = new ValConverter()
+		ValConverter conv20 = new ValConverter()
 		{
 			@Override
 			public double convert(int input)
 			{
 				return input / 20d;
+			}
+			
+			@Override
+			public int unConvert(double val)
+			{
+				return (int)(val * 20d);
+			}
+		};
+
+		ValConverter conv10000 = new ValConverter()
+		{
+			@Override
+			public double convert(int input)
+			{
+				return input / 10000d;
+			}
+			
+			@Override
+			public int unConvert(double val)
+			{
+				return (int)(val * 10000d);
 			}
 		};
 
@@ -436,25 +459,32 @@ public class ZigDetector
 			@Override
 			public double convert(int input)
 			{
-				return Math.pow(2, input);
+				return Math.pow(10, input);
+			}
+			@Override
+			public int unConvert(double val)
+			{
+				return (int)(Math.log10(val));
 			}
 		};
 
-		NumberFormat decFormat = new DecimalFormat("0.000");
-		NumberFormat expFormat = new DecimalFormat("0.000E0");
+		NumberFormat decFormat = new DecimalFormat("0.0000");
+		NumberFormat expFormat = new DecimalFormat("0.000E00");
 
-		panel.add(createItem(NOISE_SD_STR, 0, 100, conv, newListener, decFormat));
-		panel.add(createItem(RMS_ERROR_STR, -30, -1, logConv, newListener,
-				expFormat));
-		panel.add(createItem(B_Q_THRESHOLD_STR, -30, -1, logConv, newListener,
-				expFormat));
+		panel.add(createItem(NOISE_SD_STR, 0, 100, conv20, newListener, decFormat, BRG_ERROR_SD));
+		panel.add(createItem(OPTIMISER_THRESHOLD_STR, -30, -1, logConv, newListener,
+				expFormat, OPTIMISER_TOLERANCE));
+		panel.add(createItem(RMS_ZIG_ERROR_STR, 0, 500, conv10000, newListener,
+				decFormat, RMS_ZIG_THRESHOLD));
 
 		return panel;
 	}
-
+	
 	protected static interface ValConverter
 	{
 		public double convert(int input);
+
+		int unConvert(double val);
 	}
 
 	protected static interface NewValueListener
@@ -464,15 +494,19 @@ public class ZigDetector
 
 	protected JPanel createItem(final String label, int min, int max,
 			final ValConverter conv, final NewValueListener listener,
-			final NumberFormat numberFormat)
+			final NumberFormat numberFormat, double startValue)
 	{
 		final JSlider slider = new JSlider(min, max);
+		
+		System.out.println(label + " Start value:" + startValue +" unConv:" + conv.unConvert(startValue) + " conv:" + conv.convert(conv.unConvert(startValue)));
+		
+		slider.setValue(conv.unConvert(startValue));
 		JPanel panel = new JPanel();
 		panel.setLayout(new BorderLayout());
 		panel.add(slider, BorderLayout.CENTER);
 		panel.add(new JLabel(label), BorderLayout.WEST);
-		final JLabel txtLbl = new JLabel("0.00");
-		panel.add(txtLbl, BorderLayout.EAST);
+		final JLabel txtLbl = new JLabel(numberFormat.format(conv.convert(slider.getValue())));
+		panel.add(txtLbl, BorderLayout.EAST);		
 		slider.addChangeListener(new ChangeListener()
 		{
 			@Override
@@ -509,7 +543,7 @@ public class ZigDetector
 		Minimisation wholeLeg = optimiseThis(thisLegTimes, thisLegBearings,
 				thisLegBearings.get(0));
 		// is this slice acceptable?
-		if (wholeLeg.getMinimum() < ZIG_THRESHOLD)
+		if (wholeLeg.getMinimum() < RMS_ZIG_THRESHOLD)
 		{
 			legStorer.storeLeg(scenario, curStart, curEnd, sensor,
 					wholeLeg.getMinimum());
@@ -549,7 +583,7 @@ public class ZigDetector
 						+ " score:" + bestScore);
 
 				// is this slice acceptable?
-				if (bestScore < ZIG_THRESHOLD)
+				if (bestScore < RMS_ZIG_THRESHOLD)
 				{
 					legStorer.storeLeg(scenario, curStart, sliceTime, sensor, bestScore);
 
@@ -580,7 +614,7 @@ public class ZigDetector
 								beforeBearings, beforeBearings.get(0));
 						double sum = beforeOptimiser.getMinimum();
 
-						if (sum < ZIG_THRESHOLD)
+						if (sum < RMS_ZIG_THRESHOLD)
 						{
 							// ok, we can move on.
 							found = true;
@@ -623,7 +657,7 @@ public class ZigDetector
 		{ 0.2D, 0.3D, 0.3D };
 
 		// convergence tolerance
-		double ftol = CONVERGE_TOLERANCE;
+		double ftol = OPTIMISER_TOLERANCE;
 
 		// Nelder and Mead minimisation procedure
 		min.nelderMead(funct, start, step, ftol);
