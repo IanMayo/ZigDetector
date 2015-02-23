@@ -3,29 +3,23 @@
  *A project to determine the Linear regression for maritime analytic using java
  * Modules such as apache commons maths libraries and Jfreechart are used for analysis and visualization
  */
-import java.awt.BasicStroke;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Container;
 import java.awt.Dimension;
-import java.awt.Font;
 import java.awt.GridLayout;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
-import java.awt.image.BufferedImage;
 import java.beans.Transient;
-import java.io.File;
 import java.text.DecimalFormat;
+import java.text.NumberFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 
-import javax.imageio.ImageIO;
-import javax.swing.ImageIcon;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -38,15 +32,10 @@ import junit.framework.TestCase;
 import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
 import org.jfree.chart.plot.CombinedDomainXYPlot;
-import org.jfree.chart.plot.Marker;
-import org.jfree.chart.plot.ValueMarker;
 import org.jfree.chart.plot.XYPlot;
 import org.jfree.data.time.FixedMillisecond;
 import org.jfree.data.time.TimeSeries;
 import org.jfree.data.time.TimeSeriesCollection;
-import org.jfree.ui.Layer;
-import org.jfree.ui.RectangleAnchor;
-import org.jfree.ui.TextAnchor;
 
 import flanagan.interpolation.CubicSpline;
 import flanagan.math.Minimisation;
@@ -55,14 +44,23 @@ import flanagan.math.MinimisationFunction;
 public class ZigDetector
 {
 
+	private static final String B_Q_THRESHOLD_STR = "B,Q Threshold";
+
+	private static final String RMS_ERROR_STR = "RMS Error";
+
+	private static final String NOISE_SD_STR = "Noise SD";
+
 	private static final int BUFFER_SIZE = 5;
 
 	// how much RMS error we require on the Atan Curve before we
 	// bother trying to slice the target leg
-	private static final double ZIG_THRESHOLD = 0.005;
+	private static double ZIG_THRESHOLD = 0.005;
 
 	// when to let the optimiser relax
-	private static final double CONVERGE_TOLERANCE = 1e-6;
+	private static double CONVERGE_TOLERANCE = 1e-6;
+
+	// the error we add on
+	private static double BRG_ERROR_SD = 0;
 
 	final static Long timeEnd = null; // osL1end;
 
@@ -74,7 +72,7 @@ public class ZigDetector
 	{
 
 		final ZigDetector detector = new ZigDetector();
-		
+
 		// capture the start time (used for time elapsed at the end)
 		long startTime = System.currentTimeMillis();
 
@@ -82,35 +80,52 @@ public class ZigDetector
 		final JFrame frame = createFrame();
 		frame.setLocation(600, 50);
 		Container container = frame.getContentPane();
-		
-		// create the control panel
-		
+
 		// ok, insert a grid
 		JPanel inGrid = new JPanel();
 		container.add(inGrid);
 		GridLayout grid = new GridLayout(0, 2);
 		inGrid.setLayout(grid);
-		
+
 		final HashMap<String, ScenDataset> datasets = new HashMap<String, ScenDataset>();
 
-		
 		// handler for slider changes
 		NewValueListener newL = new NewValueListener()
 		{
 
 			@Override
-			public void newValue(double val)
+			public void newValue(String name, double val)
 			{
+				switch (name)
+				{
+				case NOISE_SD_STR:
+					BRG_ERROR_SD = val;
+					break;
+				case RMS_ERROR_STR:
+					ZIG_THRESHOLD = val;
+					break;
+				case B_Q_THRESHOLD_STR:
+					CONVERGE_TOLERANCE = val;
+					break;
+				}
+
 				// create the ownship & target course data
 				Iterator<ScenDataset> iterator = datasets.values().iterator();
-				while(iterator.hasNext())
+				while (iterator.hasNext())
 				{
 					// create somewhere to store it.
 					ScenDataset data = iterator.next();
-					
+
 					// clear the identified legs - to show progress
 					Plotting.clearLegMarkers(data.targetPlot);
-					
+
+					// update the title
+					NumberFormat numF = new DecimalFormat("0.###E0");
+					String title = data._name + " Noise:" + numF.format(BRG_ERROR_SD)
+							+ " Conv:" + numF.format(CONVERGE_TOLERANCE) + " Zig:"
+							+ numF.format(ZIG_THRESHOLD);
+					data.chartPanel.getChart().setTitle(title);
+
 					data.turnMarkers = new ArrayList<Long>();
 
 					// get ready to store the new legs
@@ -118,12 +133,13 @@ public class ZigDetector
 
 					// get ready to store the results runs
 					TimeSeriesCollection legResults = new TimeSeriesCollection();
-					
-					TimeSeries rmsScores = new TimeSeries("RMS Errors", FixedMillisecond.class);
+
+					TimeSeries rmsScores = new TimeSeries("RMS Errors");
 					data.legStorer.setRMSScores(rmsScores);
 					data.legStorer.setLegList(new ArrayList<LegOfData>());
-										
-					// ok, work through the legs. In the absence of a Discrete Optimisation
+
+					// ok, work through the legs. In the absence of a Discrete
+					// Optimisation
 					// algorithm we're taking a brue force approach.
 					// Hopefully Craig can find an optimised alternative to this.
 					for (Iterator<LegOfData> iterator2 = data.ownshipLegs.iterator(); iterator2
@@ -132,33 +148,33 @@ public class ZigDetector
 						LegOfData thisLeg = (LegOfData) iterator2.next();
 
 						// ok, slice the data for this leg
-						sliceThis(data._name, thisLeg.getStart(), thisLeg.getEnd(), data.sensor,
-								data.legStorer);
+						sliceThis(data._name, thisLeg.getStart(), thisLeg.getEnd(),
+								data.sensor, data.legStorer);
 
 						// create a placeholder for the overall score for this leg
-						TimeSeries atanBar = new TimeSeries("ATan " + thisLeg.getName(),
-								FixedMillisecond.class);
+						TimeSeries atanBar = new TimeSeries("ATan " + thisLeg.getName());
 						legResults.addSeries(atanBar);
 
 						// create a placeholder for the individual time slice experiments
-						TimeSeries thisSeries = new TimeSeries(thisLeg.getName() + " Slices",
-								FixedMillisecond.class);
+						TimeSeries thisSeries = new TimeSeries(thisLeg.getName()
+								+ " Slices");
 						legResults.addSeries(thisSeries);
 					}
-					
+
 					// ok, output the results
-					Plotting.plotLegPeriods(data.targetPlot, data.tgtTransColor, data.legStorer._legList);
+					Plotting.plotLegPeriods(data.targetPlot, data.tgtTransColor,
+							data.legStorer._legList);
 				}
-			}			
+			}
 		};
 
 		// - ok insert the grid controls
 		inGrid.add(detector.createControls(newL));
-		
+
 		ArrayList<String> scenarios = new ArrayList<String>();
 		scenarios.add("Scen1");
-	//	scenarios.add("Scen3");
-		
+		scenarios.add("Scen3");
+
 		// create the placeholders
 		for (Iterator<String> iterator = scenarios.iterator(); iterator.hasNext();)
 		{
@@ -171,10 +187,10 @@ public class ZigDetector
 			datasets.put(name, data);
 
 			// ok - create the placeholder
-			CombinedDomainXYPlot combinedPlot = Plotting.createPlot();			
-			data._plot  =  combinedPlot;
-			
-			ChartPanel cp = new ChartPanel(new JFreeChart("Results for " + name
+			CombinedDomainXYPlot combinedPlot = Plotting.createPlot();
+			data._plot = combinedPlot;
+
+			data.chartPanel = new ChartPanel(new JFreeChart("Results for " + name
 					+ " Tol:" + CONVERGE_TOLERANCE, JFreeChart.DEFAULT_TITLE_FONT,
 					combinedPlot, true))
 			{
@@ -192,50 +208,46 @@ public class ZigDetector
 				}
 
 			};
-			inGrid.add(cp, BorderLayout.CENTER);
+			inGrid.add(data.chartPanel, BorderLayout.CENTER);
 		}
-		
+
 		// create the ownship & target course data
 		Iterator<ScenDataset> iterator = datasets.values().iterator();
-		while(iterator.hasNext())
+		while (iterator.hasNext())
 		{
 			// create somewhere to store it.
 			ScenDataset data = iterator.next();
-			
+
 			// load the data
 			data.ownshipTrack = new Track("data/" + data._name + "_Ownship.csv");
 			data.targetTrack = new Track("data/" + data._name + "_Target.csv");
 			data.sensor = new Sensor("data/" + data._name + "_Sensor.csv");
-			
+
 			// find the ownship legs
 			data.ownshipLegs = identifyLegs(data.ownshipTrack);
 
 			// ok, now for the ownship data
 			data.oShipColor = new Color(0f, 0f, 1.0f);
 			data.oShipTransColor = new Color(0f, 0f, 1.0f, 0.2f);
-			data.ownshipPlot = Plotting.plotSingleVesselData(data._plot, "O/S", data.ownshipTrack,
-					data.oShipColor,
-					null, timeEnd);
-			
+			data.ownshipPlot = Plotting.plotSingleVesselData(data._plot, "O/S",
+					data.ownshipTrack, data.oShipColor, null, timeEnd);
+
 			// ok, now for the ownship legs
-			Plotting.plotLegPeriods(data.ownshipPlot, data.oShipTransColor, data.ownshipLegs);
+			Plotting.plotLegPeriods(data.ownshipPlot, data.oShipTransColor,
+					data.ownshipLegs);
 
 			// and the target plot
 			data.tgtColor = new Color(1.0f, 0f, 0f);
 			data.tgtTransColor = new Color(1.0f, 0f, 0f, 0.2f);
-			data.targetPlot =  Plotting.plotSingleVesselData(data._plot, "Tgt", data.targetTrack, data.tgtColor,
-					null, timeEnd);			
+			data.targetPlot = Plotting.plotSingleVesselData(data._plot, "Tgt",
+					data.targetTrack, data.tgtColor, null, timeEnd);
 		}
-		
 
-		
-		
-		
-//		detector.plotThis(inGrid, "Scen1", legStorer);
+		// detector.plotThis(inGrid, "Scen1", legStorer);
 		// plotThis(inGrid, "Scen2a", legStorer);
-//		detector.plotThis(inGrid, "Scen2b", legStorer);
-//		detector.plotThis(inGrid, "Scen3", legStorer);
-//		detector.plotThis(inGrid, "Scen4", legStorer);
+		// detector.plotThis(inGrid, "Scen2b", legStorer);
+		// detector.plotThis(inGrid, "Scen3", legStorer);
+		// detector.plotThis(inGrid, "Scen4", legStorer);
 
 		if (inGrid.getComponentCount() == 1)
 			grid.setColumns(1);
@@ -246,9 +258,10 @@ public class ZigDetector
 		System.out.println("Elapsed:" + elapsed / 1000 + " secs");
 
 	}
-	
+
 	public static class ScenDataset
 	{
+		public ChartPanel chartPanel;
 		public Color tgtTransColor;
 		public Color tgtColor;
 		public Color oShipColor;
@@ -270,21 +283,21 @@ public class ZigDetector
 		}
 
 	}
-	
 
 	public static class LegStorer
 	{
 		private ArrayList<LegOfData> _legList;
-		private TimeSeries _rmsScores ;
+		private TimeSeries _rmsScores;
 
-		public void storeLeg(String scenario, long tStart, long tEnd, Sensor sensor, double rms)
+		public void storeLeg(String scenario, long tStart, long tEnd,
+				Sensor sensor, double rms)
 		{
 			System.out.println("Storing " + scenario + " : "
 					+ dateF.format(new Date(tStart)) + " - "
 					+ dateF.format(new Date(tEnd)));
 
-			_legList.add(new LegOfData("Leg-" + (_legList.size()+1), tStart, tEnd));
-			
+			_legList.add(new LegOfData("Leg-" + (_legList.size() + 1), tStart, tEnd));
+
 			// create some RMS error scores
 			List<Long> times = sensor.extractTimes(tStart, tEnd);
 			for (Iterator<Long> iterator = times.iterator(); iterator.hasNext();)
@@ -293,7 +306,7 @@ public class ZigDetector
 				_rmsScores.add(new FixedMillisecond(long1), rms);
 			}
 		}
-		
+
 		public void setRMSScores(TimeSeries series)
 		{
 			_rmsScores = series;
@@ -310,8 +323,8 @@ public class ZigDetector
 		}
 	}
 
-	public void plotThis(Container container, String scenario,
-			LegStorer legStorer) throws Exception
+	public void plotThis(Container container, String scenario, LegStorer legStorer)
+			throws Exception
 	{
 
 		// load the data
@@ -331,13 +344,13 @@ public class ZigDetector
 
 		// get ready to store the results runs
 		TimeSeriesCollection legResults = new TimeSeriesCollection();
-		
-		TimeSeries rmsScores = new TimeSeries("RMS Errors", FixedMillisecond.class);
+
+		TimeSeries rmsScores = new TimeSeries("RMS Errors");
 		legStorer.setRMSScores(rmsScores);
 
 		List<Long> turnMarkers = new ArrayList<Long>();
 		legStorer.setLegList(new ArrayList<LegOfData>());
-		
+
 		// ok, work through the legs. In the absence of a Discrete Optimisation
 		// algorithm we're taking a brue force approach.
 		// Hopefully Craig can find an optimised alternative to this.
@@ -351,32 +364,30 @@ public class ZigDetector
 					legStorer);
 
 			// create a placeholder for the overall score for this leg
-			TimeSeries atanBar = new TimeSeries("ATan " + thisLeg.getName(),
-					FixedMillisecond.class);
+			TimeSeries atanBar = new TimeSeries("ATan " + thisLeg.getName());
 			legResults.addSeries(atanBar);
 
 			// create a placeholder for the individual time slice experiments
-			TimeSeries thisSeries = new TimeSeries(thisLeg.getName() + " Slices",
-					FixedMillisecond.class);
+			TimeSeries thisSeries = new TimeSeries(thisLeg.getName() + " Slices");
 			legResults.addSeries(thisSeries);
 
 		}
 
 		// show the track data (it contains the results)
-		Plotting.plotSingleVesselData(combinedPlot, "O/S", ownshipTrack,
-				new Color(0f, 0f, 1.0f),
-				null, timeEnd);
+		Plotting.plotSingleVesselData(combinedPlot, "O/S", ownshipTrack, new Color(
+				0f, 0f, 1.0f), null, timeEnd);
 
-		Plotting.plotSingleVesselData(combinedPlot, "Tgt", targetTrack, new Color(1.0f, 0f, 0f),
-				null, timeEnd);
+		Plotting.plotSingleVesselData(combinedPlot, "Tgt", targetTrack, new Color(
+				1.0f, 0f, 0f), null, timeEnd);
 
-		Plotting.plotSensorData(combinedPlot, sensor.getTimes(), sensor.getBearings(), rmsScores);
+		Plotting.plotSensorData(combinedPlot, sensor.getTimes(),
+				sensor.getBearings(), rmsScores);
 
 		// insert the calculated P & Q
-//		Plotting.plotPQData(combinedPlot, "Calculated", pqSeriesColl, null);
+		// Plotting.plotPQData(combinedPlot, "Calculated", pqSeriesColl, null);
 
 		// ok, also plot the leg attempts
-//		Plotting.addLegResults(combinedPlot, legResults, turnMarkers);
+		Plotting.addLegResults(combinedPlot, legResults, turnMarkers);
 
 		// wrap the combined chart
 		ChartPanel cp = new ChartPanel(new JFreeChart("Results for " + scenario
@@ -399,43 +410,61 @@ public class ZigDetector
 		};
 		container.add(cp, BorderLayout.CENTER);
 
-//		 BufferedImage wPic = ImageIO.read(new File("data/" + scenario +
-//		 "_plot.png"));
-//		 JLabel wIcon = new JLabel(new ImageIcon(wPic));
-//		 container.add(wIcon, BorderLayout.SOUTH);
+		// BufferedImage wPic = ImageIO.read(new File("data/" + scenario +
+		// "_plot.png"));
+		// JLabel wIcon = new JLabel(new ImageIcon(wPic));
+		// container.add(wIcon, BorderLayout.SOUTH);
 
 	}
 
-	protected JPanel createControls(NewValueListener  newListener)
+	protected JPanel createControls(NewValueListener newListener)
 	{
 		JPanel panel = new JPanel();
-		panel.setLayout(new GridLayout(0,1));
-		
-		ValConverter conv = new ValConverter(){
+		panel.setLayout(new GridLayout(0, 1));
+
+		ValConverter conv = new ValConverter()
+		{
 			@Override
 			public double convert(int input)
 			{
-				return input * 1000;
-			}};
-		
-		panel.add(createItem("Noise SD", 0, 100, conv, newListener));
-		panel.add(createItem("RMS Error", 0, 100, conv, newListener));
-		panel.add(createItem("B,Q Threshold", 0, 100, conv, newListener));
-		
+				return input / 20d;
+			}
+		};
+
+		ValConverter logConv = new ValConverter()
+		{
+			@Override
+			public double convert(int input)
+			{
+				return Math.pow(2, input);
+			}
+		};
+
+		NumberFormat decFormat = new DecimalFormat("0.000");
+		NumberFormat expFormat = new DecimalFormat("0.000E0");
+
+		panel.add(createItem(NOISE_SD_STR, 0, 100, conv, newListener, decFormat));
+		panel.add(createItem(RMS_ERROR_STR, -30, -1, logConv, newListener,
+				expFormat));
+		panel.add(createItem(B_Q_THRESHOLD_STR, -30, -1, logConv, newListener,
+				expFormat));
+
 		return panel;
 	}
-	
+
 	protected static interface ValConverter
 	{
 		public double convert(int input);
 	}
-	
+
 	protected static interface NewValueListener
 	{
-		public void newValue(double val);
+		public void newValue(String attribute, double val);
 	}
-	
-	protected JPanel createItem(String label, int min, int max, final ValConverter conv, final NewValueListener listener)
+
+	protected JPanel createItem(final String label, int min, int max,
+			final ValConverter conv, final NewValueListener listener,
+			final NumberFormat numberFormat)
 	{
 		final JSlider slider = new JSlider(min, max);
 		JPanel panel = new JPanel();
@@ -449,13 +478,13 @@ public class ZigDetector
 			@Override
 			public void stateChanged(ChangeEvent e)
 			{
-				
+
 				double newValue = conv.convert(slider.getValue());
-				txtLbl.setText(""+ newValue);
-				if(!slider.getValueIsAdjusting())
+				txtLbl.setText("" + numberFormat.format(newValue));
+				if (!slider.getValueIsAdjusting())
 				{
 					// ok, fire a new event
-					listener.newValue(newValue);
+					listener.newValue(label, newValue);
 				}
 			}
 		});
@@ -465,16 +494,16 @@ public class ZigDetector
 	private static void sliceThis(String scenario, long curStart, long curEnd,
 			Sensor sensor, LegStorer legStorer)
 	{
-		System.out.println("  Trying to slice : " + dateF.format(new Date(curStart))
-				+ " - " + dateF.format(new Date(curEnd)) + " " + curStart + " to "
-				+ curEnd);
+		System.out.println("  Trying to slice : "
+				+ dateF.format(new Date(curStart)) + " - "
+				+ dateF.format(new Date(curEnd)) + " " + curStart + " to " + curEnd);
 
 		// ok, find the best slice
 		// prepare the data
 		List<Double> thisLegBearings = sensor.extractBearings(curStart, curEnd);
 		List<Long> thisLegTimes = sensor.extractTimes(curStart, curEnd);
-		
-		if(thisLegBearings.size() == 0)
+
+		if (thisLegBearings.size() == 0)
 			return;
 
 		Minimisation wholeLeg = optimiseThis(thisLegTimes, thisLegBearings,
@@ -482,7 +511,8 @@ public class ZigDetector
 		// is this slice acceptable?
 		if (wholeLeg.getMinimum() < ZIG_THRESHOLD)
 		{
-			legStorer.storeLeg(scenario, curStart, curEnd, sensor, wholeLeg.getMinimum());
+			legStorer.storeLeg(scenario, curStart, curEnd, sensor,
+					wholeLeg.getMinimum());
 		}
 		else
 		{
@@ -493,13 +523,14 @@ public class ZigDetector
 
 			// find the optimal first slice
 			for (int index = 0; index < thisLegTimes.size(); index++)
-//			for (int index = 12; index < 17; index++)
+			// for (int index = 12; index < 17; index++)
 			{
 				// what's the total score for slicing at this index?
 				double sum = sliceLeg(index, thisLegBearings, thisLegTimes, BUFFER_SIZE);
 
-//				System.out.println("score for:" + dateF.format(new Date(thisLegTimes.get(index))) + " is " +  sum);
-				
+				// System.out.println("score for:" + dateF.format(new
+				// Date(thisLegTimes.get(index))) + " is " + sum);
+
 				// is this better?
 				if ((sum > 0) && (sum < bestScore))
 				{
@@ -509,12 +540,12 @@ public class ZigDetector
 					sliceTime = thisLegTimes.get(index);
 				}
 			}
-			
+
 			// right, how did we get on?
 			if (sliceTime != -1)
 			{
-				System.out.println("  Best slice at:" + dateF.format(new Date(sliceTime))
-						+ " index:" + bestSlice
+				System.out.println("  Best slice at:"
+						+ dateF.format(new Date(sliceTime)) + " index:" + bestSlice
 						+ " score:" + bestScore);
 
 				// is this slice acceptable?
@@ -527,38 +558,40 @@ public class ZigDetector
 				}
 				else
 				{
-					List<Double> trimLegBearings = sensor.extractBearings(curStart, sliceTime);
+					List<Double> trimLegBearings = sensor.extractBearings(curStart,
+							sliceTime);
 					List<Long> trimLegTimes = sensor.extractTimes(curStart, sliceTime);
-					
+
 					// ok, see if we can reduce the buffer size
 					boolean found = false;
 					int bufferLen = 1;
-					int maxBuffer = Math.min(trimLegTimes.size()-3, 7);
-					
-					
-					while(!found && bufferLen < maxBuffer)
-					{						
-						List<Long> beforeTimes = trimLegTimes.subList(0, trimLegTimes.size() - bufferLen);
-						List<Double> beforeBearings = trimLegBearings.subList(0, trimLegTimes.size() - bufferLen);
-						
-		//				System.out.println(" trimming:" + _outDates(beforeTimes));
+					int maxBuffer = Math.min(trimLegTimes.size() - 3, 7);
 
-						
-						Minimisation beforeOptimiser = optimiseThis(beforeTimes, beforeBearings,
-								beforeBearings.get(0));
+					while (!found && bufferLen < maxBuffer)
+					{
+						List<Long> beforeTimes = trimLegTimes.subList(0,
+								trimLegTimes.size() - bufferLen);
+						List<Double> beforeBearings = trimLegBearings.subList(0,
+								trimLegTimes.size() - bufferLen);
+
+						// System.out.println(" trimming:" + _outDates(beforeTimes));
+
+						Minimisation beforeOptimiser = optimiseThis(beforeTimes,
+								beforeBearings, beforeBearings.get(0));
 						double sum = beforeOptimiser.getMinimum();
-						
-						if(sum < ZIG_THRESHOLD)
+
+						if (sum < ZIG_THRESHOLD)
 						{
 							// ok, we can move on.
 							found = true;
-							legStorer.storeLeg(scenario, curStart, beforeTimes.get(beforeTimes.size()-1), sensor, sum);
+							legStorer.storeLeg(scenario, curStart,
+									beforeTimes.get(beforeTimes.size() - 1), sensor, sum);
 							curStart = sliceTime + 1;
-						}						
+						}
 
 						bufferLen++;
 					}
-					
+
 					// do we have enough left to bother with?
 					sliceThis(scenario, curStart, curEnd, sensor, legStorer);
 				}
@@ -644,7 +677,7 @@ public class ZigDetector
 			beforeScore = beforeOptimiser.getMinimum();
 			msg += " BEFORE:" + dateF.format(times.get(0)) + "-"
 					+ dateF.format(times.get(legOneEnd)) + " ";
-//			System.out.println(" before:" + _outDates(beforeTimes));
+			// System.out.println(" before:" + _outDates(beforeTimes));
 		}
 
 		if (legTwoStart != -1)
@@ -658,7 +691,7 @@ public class ZigDetector
 			afterScore = afterOptimiser.getMinimum();
 			msg += " AFTER:" + dateF.format(times.get(legTwoStart)) + "-"
 					+ dateF.format(times.get(times.size() - 1)) + " ";
-//			System.out.println(" after:" + _outDates(afterTimes));
+			// System.out.println(" after:" + _outDates(afterTimes));
 		}
 
 		// find the total error sum
@@ -752,9 +785,9 @@ public class ZigDetector
 		int res = -1;
 		int MIN_SIZE = 3;
 		int semiBuffer = buffer / 2;
-	
+
 		int lastPossibleStartPoint = end - (MIN_SIZE - 1);
-	
+
 		if (index + semiBuffer < lastPossibleStartPoint)
 		{
 			res = index + semiBuffer + 1;
@@ -767,9 +800,9 @@ public class ZigDetector
 		int res = -1;
 		int MIN_SIZE = 3;
 		int semiBuffer = buffer / 2;
-	
+
 		int earliestPossibleStartPoint = start + (MIN_SIZE - 1);
-	
+
 		if (index - semiBuffer > earliestPossibleStartPoint)
 		{
 			res = index - semiBuffer - 1;
@@ -816,13 +849,13 @@ public class ZigDetector
 	}
 
 	@SuppressWarnings("unused")
-	private static double _splineErrorfor(List<Long> times, List<Double> bearings,
-			Minimisation wholeLegOptimiser)
+	private static double _splineErrorfor(List<Long> times,
+			List<Double> bearings, Minimisation wholeLegOptimiser)
 	{
 		long startTime = times.get(0);
-	
+
 		System.out.println("time, measured, spline");
-	
+
 		double[] x = new double[times.size()];
 		double[] y = new double[times.size()];
 		for (int i = 0; i < times.size(); i++)
@@ -830,34 +863,34 @@ public class ZigDetector
 			x[i] = (times.get(i) - startTime) / 1000d;
 			y[i] = bearings.get(i);
 		}
-	
+
 		// ok, fit the spline
 		CubicSpline cs = new CubicSpline(x, y);
-	
+
 		// PolyTrendLine pt = new PolyTrendLine();
 		// pt.setValues(y, x);
-	
+
 		// and calculate the error sum
 		double runningSum = 0;
-	
+
 		double[] keys = wholeLegOptimiser.getParamValues();
-	
+
 		double B = keys[0];
 		double P = keys[1];
 		double Q = keys[2];
-	
+
 		for (int i = 0; i < times.size(); i++)
 		{
 			long elapsedMillis = times.get(i) - startTime;
 			double elapsedSecs = elapsedMillis / 1000d;
-	
+
 			double thisMeasured = bearings.get(i);
 			double thisForecast = cs.interpolate(elapsedSecs);
 			// double thisForecast = pt.predict(thisMeasured);
 			double thisError = Math.pow(thisForecast - thisMeasured, 2);
 			runningSum += thisError;
 		}
-	
+
 		for (int i = 0; i < times.size(); i++)
 		{
 			x[i] = (times.get(i) - startTime) / 1000d;
@@ -865,7 +898,7 @@ public class ZigDetector
 			// System.out.println(x[i] + ", " + y[i] + "," + pt.predict(x[i]));
 			System.out.println(x[i] + ", " + y[i] + "," + cs.interpolate(x[i]));
 		}
-	
+
 		long start = times.get(0) / 1000;
 		long lastTime = times.get(times.size() - 1) / 1000;
 		for (long i = start; i < lastTime - 60; i += 60)
@@ -874,7 +907,7 @@ public class ZigDetector
 			// System.out.println(thisT + ",0 ," + pt.predict(thisT));
 			System.out.println(thisT + ", ," + cs.interpolate(thisT));
 		}
-	
+
 		return runningSum;
 	}
 
@@ -891,31 +924,31 @@ public class ZigDetector
 			List<LegOfData> ownshipLegs)
 	{
 		TimeSeriesCollection ts = new TimeSeriesCollection();
-		TimeSeries p = new TimeSeries("P-calc", FixedMillisecond.class);
-		TimeSeries q = new TimeSeries("Q-calc", FixedMillisecond.class);
+		TimeSeries p = new TimeSeries("P-calc");
+		TimeSeries q = new TimeSeries("Q-calc");
 		ts.addSeries(p);
 		ts.addSeries(q);
-	
+
 		// ok, now loop through
 		long[] oTimes = ownship.getDates();
 		double[] oCourses = ownship.getCourses();
 		double[] oSpeeds = ownship.getSpeeds();
 		double[] tCourses = target.getCourses();
 		double[] tSpeeds = target.getSpeeds();
-	
+
 		double[] oX = ownship.getX();
 		double[] oY = ownship.getY();
 		double[] tX = target.getX();
 		double[] tY = target.getY();
-	
+
 		Double R0 = null; // lMath.sqrt(Math.pow(oX[0], 2)+Math.pow(oY[0], 2));
-	
+
 		int thisLeg = 0;
-	
+
 		for (int i = 0; i < tY.length && thisLeg < ownshipLegs.size(); i++)
 		{
 			long thisT = oTimes[i];
-	
+
 			// ok, are we in a leg?
 			if (thisT < ownshipLegs.get(thisLeg).getStart())
 			{
@@ -933,16 +966,16 @@ public class ZigDetector
 						R0 = Math.sqrt(Math.pow(tX[i] - oX[i], 2)
 								+ Math.pow(tY[i] - oY[i], 2));
 					}
-	
+
 					// now for the other calcs
 					double xO = oSpeeds[i] * Math.sin(Math.toRadians(oCourses[i]));
 					double yO = oSpeeds[i] * Math.cos(Math.toRadians(oCourses[i]));
 					double xT = tSpeeds[i] * Math.sin(Math.toRadians(tCourses[i]));
 					double yT = tSpeeds[i] * Math.cos(Math.toRadians(tCourses[i]));
-	
+
 					double P = (xT - xO) / R0;
 					double Q = (yT - yO) / R0;
-	
+
 					p.add(new FixedMillisecond(thisT), P);
 					q.add(new FixedMillisecond(thisT), Q);
 				}
@@ -954,7 +987,7 @@ public class ZigDetector
 				}
 			}
 		}
-	
+
 		return ts;
 	}
 
