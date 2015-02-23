@@ -2,6 +2,7 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 
 import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.DateTimeFormatter;
@@ -12,6 +13,8 @@ public class Sensor {
 
 	private long[] times;
 	private double[] bearings;
+	private double[] rawBearings;
+	private final Random genny = new Random();
 
 	public Sensor(final String path) throws IOException {
 
@@ -37,6 +40,7 @@ public class Sensor {
 
 			// initializing the variables to hold data in the csv file
 			bearings = new double[content.size()];
+			rawBearings = new double[content.size()];
 			times = new long[content.size()];
 
 			for (Object object : content) {
@@ -45,6 +49,7 @@ public class Sensor {
 				String thisDate = row[0].toString();
 				times[counter] = formatter.parseDateTime(thisDate).getMillis();
 				bearings[counter] = (Double.parseDouble(row[4].toString()));
+				rawBearings[counter] = (Double.parseDouble(row[4].toString()));
 				counter++;
 			}
 		} finally {
@@ -53,6 +58,25 @@ public class Sensor {
 		}
 	}
 
+	/** generate a new set of bearings by applying the
+	 * provided SD to the raw bearings
+	 * @param sd
+	 */
+	public void applyError(double sd)
+	{
+		// loop through the bearings
+		for (int i = 0; i < rawBearings.length; i++)
+		{
+			double thisB = rawBearings[i];
+			// calc a new error
+			double thisBearing = thisB + genny.nextGaussian() * sd;
+			
+			// and store it
+			bearings[i] = thisBearing;
+			
+		}
+	}
+	
 	public long[] getTimes()
 	{
 		return times;
