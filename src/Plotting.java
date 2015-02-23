@@ -285,7 +285,7 @@ public class Plotting
 			plotMarkers(xyPlot, valueMarkers);
 		}
 
-		xyPlot.getRenderer().setSeriesVisibleInLegend(true);
+		xyPlot.getRenderer().setBaseSeriesVisibleInLegend(true);
 
 		parent.add(xyPlot);
 	}
