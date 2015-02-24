@@ -370,4 +370,64 @@ public class Plotting
 		xyPlot.clearDomainMarkers();
 	}
 
+	public static XYPlot createBearingPlot(CombinedDomainXYPlot parent)
+	{
+
+		final JFreeChart chart = ChartFactory.createTimeSeriesChart("Bearing Data", // String
+				// title,
+				"Time", // String timeAxisLabel
+				"Bearing", // String valueAxisLabel,
+				null, // XYDataset dataset,
+				true, // include legend
+				true, // tooltips
+				false); // urls
+
+		parent.add(chart.getXYPlot());
+
+		return chart.getXYPlot();
+	}
+
+	public static void showBearings(XYPlot xyPlot, long[] times,
+			double[] bearings, TimeSeries rmsScores)
+	{
+
+		TimeSeriesCollection scores = new TimeSeriesCollection();
+		if (rmsScores != null)
+		{
+			scores.addSeries(rmsScores);
+		}
+		
+		TimeSeriesCollection dataset = new TimeSeriesCollection();
+		TimeSeries bSeries = new TimeSeries("Bearings");
+		dataset.addSeries(bSeries);
+		for (int i = 0; i < bearings.length; i++)
+		{
+			bSeries.add(new FixedMillisecond(times[i]), bearings[i]);
+		}
+
+		// store the data
+		xyPlot.setDataset(dataset);
+		xyPlot.setDomainCrosshairVisible(true);
+		xyPlot.setRangeCrosshairVisible(true);
+//		final DateAxis axis = (DateAxis) xyPlot.getDomainAxis();
+//		axis.setDateFormatOverride(new SimpleDateFormat("HH:mm:ss"));
+
+		final NumberAxis axis2 = new LogarithmicAxis("RMS Error");
+		xyPlot.setRangeAxis(1, axis2);
+		xyPlot.setDataset(1, scores);
+		xyPlot.mapDatasetToRangeAxis(1, 1);
+		axis2.setAutoRange(false);
+		axis2.setAutoRange(true);
+
+		XYLineAndShapeRenderer lineRenderer2 = new XYLineAndShapeRenderer(false,
+				true);
+		xyPlot.setRenderer(1, lineRenderer2);
+		xyPlot.getRenderer().setBaseSeriesVisibleInLegend(false);
+		lineRenderer2.setSeriesPaint(0, Color.green);
+
+		XYLineAndShapeRenderer lineRenderer1 = new XYLineAndShapeRenderer(true,
+				true);
+		xyPlot.setRenderer(0, lineRenderer1);
+		xyPlot.getRenderer().setBaseSeriesVisibleInLegend(true);
+	}
 }

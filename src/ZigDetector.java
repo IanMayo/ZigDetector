@@ -110,10 +110,10 @@ public class ZigDetector
 
 		ArrayList<String> scenarios = new ArrayList<String>();
 		scenarios.add("Scen1");
-		scenarios.add("Scen2a");
-		scenarios.add("Scen2b");
-		scenarios.add("Scen3");
-		scenarios.add("Scen4");
+//		scenarios.add("Scen2a");
+//		scenarios.add("Scen2b");
+//		scenarios.add("Scen3");
+//		scenarios.add("Scen4");
 
 
 		// handler for slider changes
@@ -163,8 +163,6 @@ public class ZigDetector
 					
 					// apply the error to the sensor data
 					data.sensor.applyError(BRG_ERROR_SD);
-
-				//	System.exit(0);
 					
 					// get ready to store the results runs
 					TimeSeriesCollection legResults = new TimeSeriesCollection();
@@ -195,6 +193,9 @@ public class ZigDetector
 								+ " Slices");
 						legResults.addSeries(thisSeries);
 					}
+
+					// plot the bearings
+					Plotting.showBearings(data.bearingPlot, data.sensor.getTimes(), data.sensor.getBearings(), data.legStorer._rmsScores);
 
 					// ok, output the results
 					Plotting.plotLegPeriods(data.targetPlot, data.tgtTransColor,
@@ -272,13 +273,10 @@ public class ZigDetector
 			data.tgtTransColor = new Color(1.0f, 0f, 0f, 0.2f);
 			data.targetPlot = Plotting.plotSingleVesselData(data._plot, "Tgt",
 					data.targetTrack, data.tgtColor, null, timeEnd);
+			
+			// insert a bearing plot
+			data.bearingPlot = Plotting.createBearingPlot(data._plot);
 		}
-
-		// detector.plotThis(inGrid, "Scen1", legStorer);
-		// plotThis(inGrid, "Scen2a", legStorer);
-		// detector.plotThis(inGrid, "Scen2b", legStorer);
-		// detector.plotThis(inGrid, "Scen3", legStorer);
-		// detector.plotThis(inGrid, "Scen4", legStorer);
 
 		if (inGrid.getComponentCount() == 1)
 			grid.setColumns(1);
@@ -295,6 +293,7 @@ public class ZigDetector
 
 	public static class ScenDataset
 	{
+		public XYPlot bearingPlot;
 		public ChartPanel chartPanel;
 		public Color tgtTransColor;
 		public Color tgtColor;
