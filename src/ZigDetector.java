@@ -8,6 +8,8 @@ import java.awt.Color;
 import java.awt.Container;
 import java.awt.Dimension;
 import java.awt.GridLayout;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.beans.Transient;
@@ -25,8 +27,6 @@ import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JRadioButton;
-import javax.swing.event.ChangeEvent;
-import javax.swing.event.ChangeListener;
 
 import junit.framework.TestCase;
 
@@ -61,13 +61,31 @@ public class ZigDetector
 	private static double OPTIMISER_TOLERANCE = 1e-6;
 
 	// the error we add on
-	private static double BRG_ERROR_SD = 0.5;
+	private static double BRG_ERROR_SD = 0.0;
 
 	final static Long timeEnd = null; // osL1end;
 
 	final static SimpleDateFormat dateF = new SimpleDateFormat("hh:mm:ss");
 	final static DecimalFormat numF = new DecimalFormat(
 			" 0000.0000000;-0000.0000000");
+	
+
+	protected JPanel createControls(NewValueListener newListener)
+	{
+		JPanel panel = new JPanel();
+		panel.setLayout(new GridLayout(0, 1));
+
+		NumberFormat decFormat = new DecimalFormat("0.000");
+		NumberFormat expFormat = new DecimalFormat("0.000E00");
+
+		panel.add(createItem(NOISE_SD_STR, new double[]{0d,0.1d, 0.2d, 0.25d, 0.3d, 0.5, 2d}, newListener, decFormat, BRG_ERROR_SD));
+		panel.add(createItem(OPTIMISER_THRESHOLD_STR, new double[]{1e-3, 1e-4, 1e-5, 1e-6, 1e-7}, newListener,
+				expFormat, OPTIMISER_TOLERANCE));
+		panel.add(createItem(RMS_ZIG_ERROR_STR, new double[]{0.1,0.2, 0.3,0.4, 0.5, 0.05, 0.005}, newListener,
+				decFormat, RMS_ZIG_THRESHOLD));
+
+		return panel;
+	}
 
 	public static void main(String[] args) throws Exception
 	{
@@ -91,8 +109,11 @@ public class ZigDetector
 		final HashMap<String, ScenDataset> datasets = new HashMap<String, ScenDataset>();
 
 		ArrayList<String> scenarios = new ArrayList<String>();
-//		scenarios.add("Scen1");
+		scenarios.add("Scen1");
+		scenarios.add("Scen2a");
+		scenarios.add("Scen2b");
 		scenarios.add("Scen3");
+		scenarios.add("Scen4");
 
 
 		// handler for slider changes
@@ -128,9 +149,10 @@ public class ZigDetector
 					Plotting.clearLegMarkers(data.targetPlot);
 
 					// update the title
-					NumberFormat numF = new DecimalFormat("0.###E0");
+					NumberFormat numF = new DecimalFormat("0.000");
+					NumberFormat expF = new DecimalFormat("0.###E0");
 					String title = data._name + " Noise:" + numF.format(BRG_ERROR_SD)
-							+ " Conv:" + numF.format(OPTIMISER_TOLERANCE) + " Zig:"
+							+ " Conv:" + expF.format(OPTIMISER_TOLERANCE) + " Zig:"
 							+ numF.format(RMS_ZIG_THRESHOLD);
 					data.chartPanel.getChart().setTitle(title);
 
@@ -262,6 +284,9 @@ public class ZigDetector
 			grid.setColumns(1);
 
 		frame.pack();
+		
+		// ok, we should probably initialise it
+		newL.newValue("", 0);
 
 		long elapsed = System.currentTimeMillis() - startTime;
 		System.out.println("Elapsed:" + elapsed / 1000 + " secs");
@@ -332,116 +357,100 @@ public class ZigDetector
 		}
 	}
 
-	public void plotThis(Container container, String scenario, LegStorer legStorer)
-			throws Exception
-	{
+//	public void plotThis(Container container, String scenario, LegStorer legStorer)
+//			throws Exception
+//	{
+//
+//		// load the data
+//		Track ownshipTrack = new Track("data/" + scenario + "_Ownship.csv");
+//		Track targetTrack = new Track("data/" + scenario + "_Target.csv");
+//		Sensor sensor = new Sensor("data/" + scenario + "_Sensor.csv");
+//
+//		// slice the target legs, to help assess performance
+//
+//		// Now, we have to slice the data into ownship legs
+//		// List<LegOfData> targetLegs = calculateLegs(targetTrack);
+//		List<LegOfData> ownshipLegs = identifyLegs(ownshipTrack);
+//		// ownshipLegs = ownshipLegs.subList(1, 2); // just play with the first leg
+//
+//		// create the combined plot - where we show all our data
+//		CombinedDomainXYPlot combinedPlot = Plotting.createPlot();
+//
+//		// get ready to store the results runs
+//		TimeSeriesCollection legResults = new TimeSeriesCollection();
+//
+//		TimeSeries rmsScores = new TimeSeries("RMS Errors");
+//		legStorer.setRMSScores(rmsScores);
+//
+//		List<Long> turnMarkers = new ArrayList<Long>();
+//		legStorer.setLegList(new ArrayList<LegOfData>());
+//
+//		// ok, work through the legs. In the absence of a Discrete Optimisation
+//		// algorithm we're taking a brue force approach.
+//		// Hopefully Craig can find an optimised alternative to this.
+//		for (Iterator<LegOfData> iterator = ownshipLegs.iterator(); iterator
+//				.hasNext();)
+//		{
+//			LegOfData thisLeg = (LegOfData) iterator.next();
+//
+//			// ok, slice the data for this leg
+//			sliceThis(scenario, thisLeg.getStart(), thisLeg.getEnd(), sensor,
+//					legStorer);
+//
+//			// create a placeholder for the overall score for this leg
+//			TimeSeries atanBar = new TimeSeries("ATan " + thisLeg.getName());
+//			legResults.addSeries(atanBar);
+//
+//			// create a placeholder for the individual time slice experiments
+//			TimeSeries thisSeries = new TimeSeries(thisLeg.getName() + " Slices");
+//			legResults.addSeries(thisSeries);
+//
+//		}
+//
+//		// show the track data (it contains the results)
+//		Plotting.plotSingleVesselData(combinedPlot, "O/S", ownshipTrack, new Color(
+//				0f, 0f, 1.0f), null, timeEnd);
+//
+//		Plotting.plotSingleVesselData(combinedPlot, "Tgt", targetTrack, new Color(
+//				1.0f, 0f, 0f), null, timeEnd);
+//
+//		Plotting.plotSensorData(combinedPlot, sensor.getTimes(),
+//				sensor.getBearings(), rmsScores);
+//
+//		// insert the calculated P & Q
+//		// Plotting.plotPQData(combinedPlot, "Calculated", pqSeriesColl, null);
+//
+//		// ok, also plot the leg attempts
+//		Plotting.addLegResults(combinedPlot, legResults, turnMarkers);
+//
+//		// wrap the combined chart
+//		ChartPanel cp = new ChartPanel(new JFreeChart("Results for " + scenario
+//				+ " Tol:" + OPTIMISER_TOLERANCE, JFreeChart.DEFAULT_TITLE_FONT,
+//				combinedPlot, true))
+//		{
+//
+//			/**
+//					 * 
+//					 */
+//			private static final long serialVersionUID = 1L;
+//
+//			@Override
+//			@Transient
+//			public Dimension getPreferredSize()
+//			{
+//				return new Dimension(700, 500);
+//			}
+//
+//		};
+//		container.add(cp, BorderLayout.CENTER);
+//
+//		// BufferedImage wPic = ImageIO.read(new File("data/" + scenario +
+//		// "_plot.png"));
+//		// JLabel wIcon = new JLabel(new ImageIcon(wPic));
+//		// container.add(wIcon, BorderLayout.SOUTH);
+//
+//	}
 
-		// load the data
-		Track ownshipTrack = new Track("data/" + scenario + "_Ownship.csv");
-		Track targetTrack = new Track("data/" + scenario + "_Target.csv");
-		Sensor sensor = new Sensor("data/" + scenario + "_Sensor.csv");
-
-		// slice the target legs, to help assess performance
-
-		// Now, we have to slice the data into ownship legs
-		// List<LegOfData> targetLegs = calculateLegs(targetTrack);
-		List<LegOfData> ownshipLegs = identifyLegs(ownshipTrack);
-		// ownshipLegs = ownshipLegs.subList(1, 2); // just play with the first leg
-
-		// create the combined plot - where we show all our data
-		CombinedDomainXYPlot combinedPlot = Plotting.createPlot();
-
-		// get ready to store the results runs
-		TimeSeriesCollection legResults = new TimeSeriesCollection();
-
-		TimeSeries rmsScores = new TimeSeries("RMS Errors");
-		legStorer.setRMSScores(rmsScores);
-
-		List<Long> turnMarkers = new ArrayList<Long>();
-		legStorer.setLegList(new ArrayList<LegOfData>());
-
-		// ok, work through the legs. In the absence of a Discrete Optimisation
-		// algorithm we're taking a brue force approach.
-		// Hopefully Craig can find an optimised alternative to this.
-		for (Iterator<LegOfData> iterator = ownshipLegs.iterator(); iterator
-				.hasNext();)
-		{
-			LegOfData thisLeg = (LegOfData) iterator.next();
-
-			// ok, slice the data for this leg
-			sliceThis(scenario, thisLeg.getStart(), thisLeg.getEnd(), sensor,
-					legStorer);
-
-			// create a placeholder for the overall score for this leg
-			TimeSeries atanBar = new TimeSeries("ATan " + thisLeg.getName());
-			legResults.addSeries(atanBar);
-
-			// create a placeholder for the individual time slice experiments
-			TimeSeries thisSeries = new TimeSeries(thisLeg.getName() + " Slices");
-			legResults.addSeries(thisSeries);
-
-		}
-
-		// show the track data (it contains the results)
-		Plotting.plotSingleVesselData(combinedPlot, "O/S", ownshipTrack, new Color(
-				0f, 0f, 1.0f), null, timeEnd);
-
-		Plotting.plotSingleVesselData(combinedPlot, "Tgt", targetTrack, new Color(
-				1.0f, 0f, 0f), null, timeEnd);
-
-		Plotting.plotSensorData(combinedPlot, sensor.getTimes(),
-				sensor.getBearings(), rmsScores);
-
-		// insert the calculated P & Q
-		// Plotting.plotPQData(combinedPlot, "Calculated", pqSeriesColl, null);
-
-		// ok, also plot the leg attempts
-		Plotting.addLegResults(combinedPlot, legResults, turnMarkers);
-
-		// wrap the combined chart
-		ChartPanel cp = new ChartPanel(new JFreeChart("Results for " + scenario
-				+ " Tol:" + OPTIMISER_TOLERANCE, JFreeChart.DEFAULT_TITLE_FONT,
-				combinedPlot, true))
-		{
-
-			/**
-					 * 
-					 */
-			private static final long serialVersionUID = 1L;
-
-			@Override
-			@Transient
-			public Dimension getPreferredSize()
-			{
-				return new Dimension(700, 500);
-			}
-
-		};
-		container.add(cp, BorderLayout.CENTER);
-
-		// BufferedImage wPic = ImageIO.read(new File("data/" + scenario +
-		// "_plot.png"));
-		// JLabel wIcon = new JLabel(new ImageIcon(wPic));
-		// container.add(wIcon, BorderLayout.SOUTH);
-
-	}
-
-	protected JPanel createControls(NewValueListener newListener)
-	{
-		JPanel panel = new JPanel();
-		panel.setLayout(new GridLayout(0, 1));
-
-		NumberFormat decFormat = new DecimalFormat("0.0000");
-		NumberFormat expFormat = new DecimalFormat("0.000E00");
-
-		panel.add(createItem(NOISE_SD_STR, new double[]{0d, 0.5, 2d}, newListener, decFormat, BRG_ERROR_SD));
-		panel.add(createItem(OPTIMISER_THRESHOLD_STR, new double[]{1e-3, 1e-4, 1e-5, 1e-6, 1e-7}, newListener,
-				expFormat, OPTIMISER_TOLERANCE));
-		panel.add(createItem(RMS_ZIG_ERROR_STR, new double[]{0.05, 0.005, 0.0005}, newListener,
-				decFormat, RMS_ZIG_THRESHOLD));
-
-		return panel;
-	}
 	
 	protected static interface ValConverter
 	{
@@ -473,18 +482,18 @@ public class ZigDetector
 			newB.setText(numberFormat.format(values[i]));
 			if(thisD == startValue)
 				newB.setSelected(true);
-			newB.addChangeListener(new ChangeListener()
-			{
-				
+			newB.addActionListener(new ActionListener(){
+
 				@Override
-				public void stateChanged(ChangeEvent e)
+				public void actionPerformed(ActionEvent e)
 				{
+					System.out.println(label + " changed to:" + e.toString());
+					
 					if(newB.isSelected())
 					{
 						listener.newValue(label, thisD);
 					}
-				}
-			});
+				}});
 			buttons.add(newB);
 			bg.add(newB);
 		}
@@ -499,8 +508,8 @@ public class ZigDetector
 			Sensor sensor, LegStorer legStorer)
 	{
 		System.out.println("  Trying to slice : "
-				+ dateF.format(new Date(curStart)) + " - "
-				+ dateF.format(new Date(curEnd)) + " " + curStart + " to " + curEnd);
+				+ dateF.format(new Date(curStart)) ); // + " - "
+				// + dateF.format(new Date(curEnd)) + " " + curStart + " to " + curEnd);
 
 		// ok, find the best slice
 		// prepare the data
