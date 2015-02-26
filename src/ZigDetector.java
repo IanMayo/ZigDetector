@@ -111,9 +111,9 @@ public class ZigDetector
 		ArrayList<String> scenarios = new ArrayList<String>();
 		scenarios.add("Scen1");
 //		scenarios.add("Scen2a");
-//		scenarios.add("Scen2b");
-//		scenarios.add("Scen3");
-//		scenarios.add("Scen4");
+		scenarios.add("Scen2b");
+		scenarios.add("Scen3");
+		scenarios.add("Scen4");
 
 
 		// handler for slider changes
@@ -205,7 +205,8 @@ public class ZigDetector
 		};
 
 		// - ok insert the grid controls
-		inGrid.add(detector.createControls(newL));
+		//inGrid.add(
+				detector.createControls(newL);//);
 
 		// create the placeholders
 		for (Iterator<String> iterator = scenarios.iterator(); iterator.hasNext();)
@@ -507,8 +508,8 @@ public class ZigDetector
 			Sensor sensor, LegStorer legStorer)
 	{
 		System.out.println("  Trying to slice : "
-				+ dateF.format(new Date(curStart)) ); // + " - "
-				// + dateF.format(new Date(curEnd)) + " " + curStart + " to " + curEnd);
+				+ dateF.format(new Date(curStart)) + " - "
+				 + dateF.format(new Date(curEnd)) );// + " " + curStart + " to " + curEnd);
 
 		// ok, find the best slice
 		// prepare the data
