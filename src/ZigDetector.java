@@ -109,11 +109,12 @@ public class ZigDetector
 		final HashMap<String, ScenDataset> datasets = new HashMap<String, ScenDataset>();
 
 		ArrayList<String> scenarios = new ArrayList<String>();
-		scenarios.add("Scen1");
+//		scenarios.add("Scen1");
 //		scenarios.add("Scen2a");
-		scenarios.add("Scen2b");
-		scenarios.add("Scen3");
-		scenarios.add("Scen4");
+//		scenarios.add("Scen2b");
+//		scenarios.add("Scen3");
+//		scenarios.add("Scen4");
+		scenarios.add("Scen5");
 
 
 		// handler for slider changes
@@ -252,8 +253,8 @@ public class ZigDetector
 			ScenDataset data = iterator.next();
 
 			// load the data
-			data.ownshipTrack = new Track("data/" + data._name + "_Ownship.csv");
-			data.targetTrack = new Track("data/" + data._name + "_Target.csv");
+			data.ownshipTrack = Track.read("data/" + data._name + "_Ownship.csv");
+			data.targetTrack = Track.read("data/" + data._name + "_Target.csv");
 			data.sensor = new Sensor("data/" + data._name + "_Sensor.csv");
 
 			// find the ownship legs
