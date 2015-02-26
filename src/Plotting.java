@@ -74,33 +74,36 @@ public class Plotting
 			final Long endTime)
 	{
 
-		TimeSeriesCollection dataset1 = new TimeSeriesCollection();
-		TimeSeriesCollection dataset2 = new TimeSeriesCollection();
+		TimeSeriesCollection dataCrse = new TimeSeriesCollection();
+		TimeSeriesCollection dataSpeed = new TimeSeriesCollection();
 
 		TimeSeries data1 = new TimeSeries(title + "Course");
 		TimeSeries data2 = new TimeSeries(title + "Speed");
 
-		double[] courses = ownshipTrack.getCourses();
-		double[] speeds = ownshipTrack.getSpeeds();
-		long[] times = ownshipTrack.getDates();
-
-		// obtain the data for the points
-		for (int i = 0; i < times.length; i++)
+		if (ownshipTrack != null)
 		{
-			long thisTime = times[i];
-			if (endTime == null || thisTime <= endTime)
+			double[] courses = ownshipTrack.getCourses();
+			double[] speeds = ownshipTrack.getSpeeds();
+			long[] times = ownshipTrack.getDates();
+
+			// obtain the data for the points
+			for (int i = 0; i < times.length; i++)
 			{
-				data1.add(new FixedMillisecond(thisTime), courses[i]);
-				data2.add(new FixedMillisecond(thisTime), speeds[i]);
+				long thisTime = times[i];
+				if (endTime == null || thisTime <= endTime)
+				{
+					data1.add(new FixedMillisecond(thisTime), courses[i]);
+					data2.add(new FixedMillisecond(thisTime), speeds[i]);
+				}
 			}
+			dataCrse.addSeries(data1);
+			dataSpeed.addSeries(data2);
 		}
-		dataset1.addSeries(data1);
-		dataset2.addSeries(data2);
 
 		final JFreeChart chart = ChartFactory.createTimeSeriesChart(title, // String
 				"Time", // String timeAxisLabel
 				title + "Course", // String valueAxisLabel,
-				dataset1, // XYDataset dataset,
+				dataCrse, // XYDataset dataset,
 				true, // include legend
 				true, // tooltips
 				false); // urls
@@ -113,7 +116,7 @@ public class Plotting
 
 		final NumberAxis axis2 = new NumberAxis(title + "Speed");
 		xyPlot.setRangeAxis(1, axis2);
-		xyPlot.setDataset(1, dataset2);
+		xyPlot.setDataset(1, dataSpeed);
 		xyPlot.mapDatasetToRangeAxis(1, 1);
 
 		XYLineAndShapeRenderer lineRenderer1 = new XYLineAndShapeRenderer(true,
@@ -396,7 +399,7 @@ public class Plotting
 		{
 			scores.addSeries(rmsScores);
 		}
-		
+
 		TimeSeriesCollection dataset = new TimeSeriesCollection();
 		TimeSeries bSeries = new TimeSeries("Bearings");
 		dataset.addSeries(bSeries);
@@ -409,8 +412,8 @@ public class Plotting
 		xyPlot.setDataset(dataset);
 		xyPlot.setDomainCrosshairVisible(true);
 		xyPlot.setRangeCrosshairVisible(true);
-//		final DateAxis axis = (DateAxis) xyPlot.getDomainAxis();
-//		axis.setDateFormatOverride(new SimpleDateFormat("HH:mm:ss"));
+		// final DateAxis axis = (DateAxis) xyPlot.getDomainAxis();
+		// axis.setDateFormatOverride(new SimpleDateFormat("HH:mm:ss"));
 
 		final NumberAxis axis2 = new LogarithmicAxis("RMS Error");
 		xyPlot.setRangeAxis(1, axis2);
