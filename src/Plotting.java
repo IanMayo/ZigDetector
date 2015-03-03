@@ -69,6 +69,44 @@ public class Plotting
 		return xyPlot;
 	}
 
+	public static void addAverageCourse(XYPlot ownshipPlot,
+			double[] averageCourses, double[] averageSpeeds, long[] times)
+	{
+		// TODO Auto-generated method stub
+		TimeSeriesCollection dataCrse = new TimeSeriesCollection();
+		TimeSeriesCollection dataSpeed = new TimeSeriesCollection();
+
+		TimeSeries data1 = new TimeSeries("Avg Course");
+		TimeSeries data2 = new TimeSeries("Avg Speed");
+
+		// obtain the data for the points
+		for (int i = 0; i < times.length; i++)
+		{
+			long thisTime = times[i];
+			data1.add(new FixedMillisecond(thisTime), averageCourses[i]);
+			data2.add(new FixedMillisecond(thisTime), averageSpeeds[i]);
+		}
+		dataCrse.addSeries(data1);
+		dataSpeed.addSeries(data2);
+		ownshipPlot.setDataset(2, dataCrse);
+		ownshipPlot.setDataset(3, dataSpeed);
+
+		XYLineAndShapeRenderer lineRenderer1 = new XYLineAndShapeRenderer(true,
+				true);
+		lineRenderer1.setSeriesPaint(0, Color.green);
+		lineRenderer1.setSeriesShape(0, ShapeUtilities.createDownTriangle(2f));
+		ownshipPlot.setRenderer(2, lineRenderer1);
+
+		XYLineAndShapeRenderer lineRenderer2 = new XYLineAndShapeRenderer(true,
+				true);
+		lineRenderer2.setSeriesPaint(0, Color.green);
+		lineRenderer2.setSeriesShape(0, ShapeUtilities.createUpTriangle(2f));
+		ownshipPlot.setRenderer(3, lineRenderer2);
+
+		ownshipPlot.mapDatasetToRangeAxis(3, 1);
+
+	}
+
 	public static XYPlot plotSingleVesselData(CombinedDomainXYPlot parent,
 			String title, Track ownshipTrack, Color color, List<Long> valueMarkers,
 			final Long endTime)
@@ -146,6 +184,9 @@ public class Plotting
 	public static void plotLegPeriods(XYPlot xyPlot, Color transColor,
 			List<LegOfData> ownshipLegs)
 	{
+		if(xyPlot == null)
+			return;
+		
 		// clear any domain markesr
 		xyPlot.clearDomainMarkers();
 
@@ -370,7 +411,8 @@ public class Plotting
 
 	public static void clearLegMarkers(XYPlot xyPlot)
 	{
-		xyPlot.clearDomainMarkers();
+		if (xyPlot != null)
+			xyPlot.clearDomainMarkers();
 	}
 
 	public static XYPlot createBearingPlot(CombinedDomainXYPlot parent)
@@ -394,6 +436,9 @@ public class Plotting
 			double[] bearings, TimeSeries rmsScores)
 	{
 
+		if(xyPlot == null)
+			return; 
+		
 		TimeSeriesCollection scores = new TimeSeriesCollection();
 		if (rmsScores != null)
 		{
@@ -433,4 +478,5 @@ public class Plotting
 		xyPlot.setRenderer(0, lineRenderer1);
 		xyPlot.getRenderer().setBaseSeriesVisibleInLegend(true);
 	}
+
 }
