@@ -57,8 +57,8 @@ public class ZigDetector
 
 	// how much RMS error we require on the Atan Curve before we
 	// bother trying to slice the target leg
-	private static double RMS_ZIG_THRESHOLD = 50;
-//	private static double RMS_ZIG_THRESHOLD = 0.005;
+	private static double RMS_ZIG_THRESHOLD = 2;
+	// private static double RMS_ZIG_THRESHOLD = 0.005;
 
 	// when to let the optimiser relax
 	private static double OPTIMISER_TOLERANCE = 1e-6;
@@ -68,7 +68,7 @@ public class ZigDetector
 
 	final static Long timeEnd = null; // osL1end;
 
-	final static SimpleDateFormat dateF = new SimpleDateFormat("hh:mm:ss");
+	final static SimpleDateFormat dateF = new SimpleDateFormat("HH:mm:ss");
 	final static DecimalFormat numF = new DecimalFormat(
 			" 0000.0000000;-0000.0000000");
 
@@ -84,10 +84,10 @@ public class ZigDetector
 		{ 0d, 0.1d, 0.2d, 0.25d, 0.3d, 0.5, 2d }, newListener, decFormat,
 				BRG_ERROR_SD));
 		panel.add(createItem(OPTIMISER_THRESHOLD_STR, new double[]
-		{ 1e-3, 1e-4, 1e-5, 1e-6, 1e-7 }, newListener, expFormat,
+		{ 1e-4, 1e-5, 1e-6, 1e-7, 1e-8 }, newListener, expFormat,
 				OPTIMISER_TOLERANCE));
 		panel.add(createItem(RMS_ZIG_ERROR_STR, new double[]
-		{ 0.1, 0.2, 0.3, 0.4, 0.5, 0.05, 0.005 }, newListener, decFormat,
+		{ 2, 1.6, 1.4, 1.2, 1.0, 0.8, 0.6 }, newListener, decFormat,
 				RMS_ZIG_THRESHOLD));
 
 		return panel;
@@ -189,13 +189,13 @@ public class ZigDetector
 						// ok, slice the data for this leg
 						long legStart = thisLeg.getStart();
 						long legEnd = thisLeg.getEnd();
-						
+
 						// trim the start/end to the sensor data
 						legStart = Math.max(legStart, data.sensor.getTimes()[0]);
-						legEnd = Math.min(legEnd, data.sensor.getTimes()[data.sensor.getTimes().length-1]);
-						
-						sliceThis(data._name, legStart, legEnd,
-								data.sensor, data.legStorer);
+						legEnd = Math.min(legEnd,
+								data.sensor.getTimes()[data.sensor.getTimes().length - 1]);
+
+						sliceThis(data._name, legStart, legEnd, data.sensor, data.legStorer);
 
 						// create a placeholder for the overall score for this leg
 						TimeSeries atanBar = new TimeSeries("ATan " + thisLeg.getName());
@@ -219,8 +219,7 @@ public class ZigDetector
 		};
 
 		// - ok insert the grid controls
-		// inGrid.add(
-		detector.createControls(newL);// );
+		inGrid.add(detector.createControls(newL));
 
 		// create the placeholders
 		for (Iterator<String> iterator = scenarios.iterator(); iterator.hasNext();)
@@ -271,7 +270,8 @@ public class ZigDetector
 			data.sensor = new Sensor("data/" + data._name + "_Sensor.csv");
 
 			// find the ownship legs
-			data.ownshipLegs = identifyLegs(data.ownshipTrack, 5);
+			data.ownshipLegs = identifyOwnshipLegs(data.ownshipTrack, 5);
+//			data.ownshipLegs = data.ownshipLegs.subList(1, 2);
 
 			// ok, now for the ownship data
 			data.oShipColor = new Color(0f, 0f, 1.0f);
@@ -285,13 +285,15 @@ public class ZigDetector
 
 			// try to plot the moving average
 			// switch the courses to an n-term moving average
-			Plotting.addAverageCourse(data.ownshipPlot, data.ownshipTrack.averageCourses, data.ownshipTrack.averageSpeeds, data.ownshipTrack.getDates());
-			
+			Plotting.addAverageCourse(data.ownshipPlot,
+					data.ownshipTrack.averageCourses, data.ownshipTrack.averageSpeeds,
+					data.ownshipTrack.getDates());
+
 			// and the target plot
 			data.tgtColor = new Color(1.0f, 0f, 0f);
 			data.tgtTransColor = new Color(1.0f, 0f, 0f, 0.2f);
-			data.targetPlot = Plotting.plotSingleVesselData(data._plot, "Tgt",
-					data.targetTrack, data.tgtColor, null, timeEnd);
+			 data.targetPlot = Plotting.plotSingleVesselData(data._plot, "Tgt",
+			 data.targetTrack, data.tgtColor, null, timeEnd);
 
 			// insert a bearing plot
 			data.bearingPlot = Plotting.createBearingPlot(data._plot);
@@ -561,6 +563,8 @@ public class ZigDetector
 			{
 				// what's the total score for slicing at this index?
 				double sum = sliceLeg(index, thisLegBearings, thisLegTimes, BUFFER_SIZE);
+				
+//				System.out.println("score at: " + dateF.format(new Date(thisLegTimes.get(index))) + " = " + sum);
 
 				// System.out.println("score for:" + dateF.format(new
 				// Date(thisLegTimes.get(index))) + " is " + sum);
@@ -587,8 +591,16 @@ public class ZigDetector
 				{
 					legStorer.storeLeg(scenario, curStart, sliceTime, sensor, bestScore);
 
-					// have a look at the rest of the leg
-					sliceThis(scenario, sliceTime + 60000, curEnd, sensor, legStorer);
+					// move the leg start along a little, to allow for a turn
+					long newLegStart = sliceTime + 60000;
+					
+					// do we have enough to look at?
+					long remainingTime = curEnd - newLegStart;
+					
+					System.out.println("  about to slice, have " + (remainingTime / 1000) + " secs left");
+					
+					// try to slice it
+					sliceThis(scenario, newLegStart, curEnd, sensor, legStorer);
 				}
 				else
 				{
@@ -765,11 +777,11 @@ public class ZigDetector
 	 * @param elapsedTimes
 	 * @return
 	 */
-	private static List<LegOfData> identifyLegs(Track track, int avgPeriod)
+	private static List<LegOfData> identifyOwnshipLegs(Track track, int avgPeriod)
 	{
 
 		final double COURSE_TOLERANCE = 0.1; // degs / sec (just a guess!!)
-		final double SPEED_TOLERANCE = 0.003; // knots / sec (just a guess!!)
+		final double SPEED_TOLERANCE = 0.01; // knots / sec (just a guess!!)
 
 		double lastCourse = 0;
 		double lastSpeed = 0;
@@ -830,7 +842,8 @@ public class ZigDetector
 		return legs;
 	}
 
-	/** create a moving average over the set of dat measurements
+	/**
+	 * create a moving average over the set of dat measurements
 	 * 
 	 * @param measurements
 	 * @param period
@@ -839,12 +852,13 @@ public class ZigDetector
 	private static double[] movingAverage(double[] measurements, int period)
 	{
 		double[] res = new double[measurements.length];
-    MovingAverage ma = new MovingAverage(period);
+		CenteredMovingAverage ma = new CenteredMovingAverage(period);
 		for (int j = 0; j < measurements.length; j++)
 		{
-			double d = measurements[j];
-      ma.newNum(d);
-      res[j] = ma.getAvg();
+//			double d = measurements[j];
+//			ma.newNum(d);
+//			res[j] = ma.getAvg();
+			res[j] = ma.average(j, measurements);
 		}
 		return res;
 	}
@@ -906,8 +920,17 @@ public class ZigDetector
 				double elapsedSecs = elapsedMillis / 1000d;
 				double thisForecast = calcForecast(B, P, Q, elapsedSecs);
 				double thisMeasured = _bearings.get(i);
-				double thisError = Math.pow(thisForecast - thisMeasured, 2);
-				runningSum += thisError;
+				double thisError = thisForecast - thisMeasured;
+				if (thisError > 180)
+				{
+					thisError -= 360;
+				}
+				else if (thisError < -180)
+				{
+					thisError += 360;
+				}
+				double sqError = Math.pow(thisError, 2);
+				runningSum += sqError;
 			}
 			double mean = runningSum / _times.size();
 
