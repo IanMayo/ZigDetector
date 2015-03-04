@@ -49,7 +49,7 @@ public class ZigDetector
 
 	private static final String OPTIMISER_THRESHOLD_STR = "Optim Thresh";
 
-	private static final String RMS_ZIG_ERROR_STR = "RMS Zig Error";
+	private static final String RMS_ZIG_RATIO_STR = "RMS Zig Ratio";
 
 	private static final String NOISE_SD_STR = "Noise SD";
 
@@ -57,7 +57,7 @@ public class ZigDetector
 
 	// how much RMS error we require on the Atan Curve before we
 	// bother trying to slice the target leg
-	private static double RMS_ZIG_THRESHOLD = 2;
+	private static double RMS_ZIG_RATIO = 0.6;
 	// private static double RMS_ZIG_THRESHOLD = 0.005;
 
 	// when to let the optimiser relax
@@ -86,9 +86,8 @@ public class ZigDetector
 		panel.add(createItem(OPTIMISER_THRESHOLD_STR, new double[]
 		{ 1e-4, 1e-5, 1e-6, 1e-7, 1e-8 }, newListener, expFormat,
 				OPTIMISER_TOLERANCE));
-		panel.add(createItem(RMS_ZIG_ERROR_STR, new double[]
-		{ 2, 1.6, 1.4, 1.2, 1.0, 0.8, 0.6 }, newListener, decFormat,
-				RMS_ZIG_THRESHOLD));
+		panel.add(createItem(RMS_ZIG_RATIO_STR, new double[]
+		{1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3 }, newListener, decFormat, RMS_ZIG_RATIO));
 
 		return panel;
 	}
@@ -134,8 +133,8 @@ public class ZigDetector
 				case NOISE_SD_STR:
 					BRG_ERROR_SD = val;
 					break;
-				case RMS_ZIG_ERROR_STR:
-					RMS_ZIG_THRESHOLD = val;
+				case RMS_ZIG_RATIO_STR:
+					RMS_ZIG_RATIO = val;
 					break;
 				case OPTIMISER_THRESHOLD_STR:
 					OPTIMISER_TOLERANCE = val;
@@ -159,7 +158,7 @@ public class ZigDetector
 					NumberFormat expF = new DecimalFormat("0.###E0");
 					String title = data._name + " Noise:" + numF.format(BRG_ERROR_SD)
 							+ " Conv:" + expF.format(OPTIMISER_TOLERANCE) + " Zig:"
-							+ numF.format(RMS_ZIG_THRESHOLD);
+							+ numF.format(RMS_ZIG_RATIO);
 					data.chartPanel.getChart().setTitle(title);
 
 					data.turnMarkers = new ArrayList<Long>();
@@ -271,7 +270,7 @@ public class ZigDetector
 
 			// find the ownship legs
 			data.ownshipLegs = identifyOwnshipLegs(data.ownshipTrack, 5);
-//			data.ownshipLegs = data.ownshipLegs.subList(1, 2);
+		//	 data.ownshipLegs = data.ownshipLegs.subList(2, 3);
 
 			// ok, now for the ownship data
 			data.oShipColor = new Color(0f, 0f, 1.0f);
@@ -292,8 +291,8 @@ public class ZigDetector
 			// and the target plot
 			data.tgtColor = new Color(1.0f, 0f, 0f);
 			data.tgtTransColor = new Color(1.0f, 0f, 0f, 0.2f);
-			 data.targetPlot = Plotting.plotSingleVesselData(data._plot, "Tgt",
-			 data.targetTrack, data.tgtColor, null, timeEnd);
+			data.targetPlot = Plotting.plotSingleVesselData(data._plot, "Tgt",
+					data.targetTrack, data.tgtColor, null, timeEnd);
 
 			// insert a bearing plot
 			data.bearingPlot = Plotting.createBearingPlot(data._plot);
@@ -377,101 +376,6 @@ public class ZigDetector
 		}
 	}
 
-	// public void plotThis(Container container, String scenario, LegStorer
-	// legStorer)
-	// throws Exception
-	// {
-	//
-	// // load the data
-	// Track ownshipTrack = new Track("data/" + scenario + "_Ownship.csv");
-	// Track targetTrack = new Track("data/" + scenario + "_Target.csv");
-	// Sensor sensor = new Sensor("data/" + scenario + "_Sensor.csv");
-	//
-	// // slice the target legs, to help assess performance
-	//
-	// // Now, we have to slice the data into ownship legs
-	// // List<LegOfData> targetLegs = calculateLegs(targetTrack);
-	// List<LegOfData> ownshipLegs = identifyLegs(ownshipTrack);
-	// // ownshipLegs = ownshipLegs.subList(1, 2); // just play with the first leg
-	//
-	// // create the combined plot - where we show all our data
-	// CombinedDomainXYPlot combinedPlot = Plotting.createPlot();
-	//
-	// // get ready to store the results runs
-	// TimeSeriesCollection legResults = new TimeSeriesCollection();
-	//
-	// TimeSeries rmsScores = new TimeSeries("RMS Errors");
-	// legStorer.setRMSScores(rmsScores);
-	//
-	// List<Long> turnMarkers = new ArrayList<Long>();
-	// legStorer.setLegList(new ArrayList<LegOfData>());
-	//
-	// // ok, work through the legs. In the absence of a Discrete Optimisation
-	// // algorithm we're taking a brue force approach.
-	// // Hopefully Craig can find an optimised alternative to this.
-	// for (Iterator<LegOfData> iterator = ownshipLegs.iterator(); iterator
-	// .hasNext();)
-	// {
-	// LegOfData thisLeg = (LegOfData) iterator.next();
-	//
-	// // ok, slice the data for this leg
-	// sliceThis(scenario, thisLeg.getStart(), thisLeg.getEnd(), sensor,
-	// legStorer);
-	//
-	// // create a placeholder for the overall score for this leg
-	// TimeSeries atanBar = new TimeSeries("ATan " + thisLeg.getName());
-	// legResults.addSeries(atanBar);
-	//
-	// // create a placeholder for the individual time slice experiments
-	// TimeSeries thisSeries = new TimeSeries(thisLeg.getName() + " Slices");
-	// legResults.addSeries(thisSeries);
-	//
-	// }
-	//
-	// // show the track data (it contains the results)
-	// Plotting.plotSingleVesselData(combinedPlot, "O/S", ownshipTrack, new Color(
-	// 0f, 0f, 1.0f), null, timeEnd);
-	//
-	// Plotting.plotSingleVesselData(combinedPlot, "Tgt", targetTrack, new Color(
-	// 1.0f, 0f, 0f), null, timeEnd);
-	//
-	// Plotting.plotSensorData(combinedPlot, sensor.getTimes(),
-	// sensor.getBearings(), rmsScores);
-	//
-	// // insert the calculated P & Q
-	// // Plotting.plotPQData(combinedPlot, "Calculated", pqSeriesColl, null);
-	//
-	// // ok, also plot the leg attempts
-	// Plotting.addLegResults(combinedPlot, legResults, turnMarkers);
-	//
-	// // wrap the combined chart
-	// ChartPanel cp = new ChartPanel(new JFreeChart("Results for " + scenario
-	// + " Tol:" + OPTIMISER_TOLERANCE, JFreeChart.DEFAULT_TITLE_FONT,
-	// combinedPlot, true))
-	// {
-	//
-	// /**
-	// *
-	// */
-	// private static final long serialVersionUID = 1L;
-	//
-	// @Override
-	// @Transient
-	// public Dimension getPreferredSize()
-	// {
-	// return new Dimension(700, 500);
-	// }
-	//
-	// };
-	// container.add(cp, BorderLayout.CENTER);
-	//
-	// // BufferedImage wPic = ImageIO.read(new File("data/" + scenario +
-	// // "_plot.png"));
-	// // JLabel wIcon = new JLabel(new ImageIcon(wPic));
-	// // container.add(wIcon, BorderLayout.SOUTH);
-	//
-	// }
-
 	protected static interface ValConverter
 	{
 		public double convert(int input);
@@ -526,136 +430,273 @@ public class ZigDetector
 		return panel;
 	}
 
-	private static void sliceThis(String scenario, long curStart, long curEnd,
-			Sensor sensor, LegStorer legStorer)
+	private static void sliceThis(String scenario, final long wholeStart,
+			final long wholeEnd, Sensor sensor, LegStorer legStorer)
 	{
 		System.out.println("  Trying to slice : "
-				+ dateF.format(new Date(curStart)) + " - "
-				+ dateF.format(new Date(curEnd)));// + " " + curStart + " to " +
-																					// curEnd);
+				+ dateF.format(new Date(wholeStart)) + " - "
+				+ dateF.format(new Date(wholeEnd)));// + " " + curStart + " to " +
+		// curEnd);
 
 		// ok, find the best slice
 		// prepare the data
-		List<Double> thisLegBearings = sensor.extractBearings(curStart, curEnd);
-		List<Long> thisLegTimes = sensor.extractTimes(curStart, curEnd);
+		List<Double> thisLegBearings = sensor.extractBearings(wholeStart, wholeEnd);
+		List<Long> thisLegTimes = sensor.extractTimes(wholeStart, wholeEnd);
 
 		if (thisLegBearings.size() == 0)
 			return;
 
 		Minimisation wholeLeg = optimiseThis(thisLegTimes, thisLegBearings,
 				thisLegBearings.get(0));
-		// is this slice acceptable?
-		if (wholeLeg.getMinimum() < RMS_ZIG_THRESHOLD)
-		{
-			legStorer.storeLeg(scenario, curStart, curEnd, sensor,
-					wholeLeg.getMinimum());
-		}
-		else
-		{
-			// ok, we'll have to slice it
-			double bestScore = Double.MAX_VALUE;
-			int bestSlice = -1;
-			long sliceTime = -1;
+		double wholeLegScore = wholeLeg.getMinimum();
 
-			// find the optimal first slice
-			for (int index = 0; index < thisLegTimes.size(); index++)
-			// for (int index = 12; index < 17; index++)
+		// ok, now have to slice it
+		double bestScore = Double.MAX_VALUE;
+		int bestSlice = -1;
+		long sliceTime = -1;
+		long bestLegOneEnd = -1;
+		long bestLegTwoStart = -1;
+
+		// find the optimal first slice
+		for (int index = 0; index < thisLegTimes.size(); index++)
+		// for (int index = 12; index < 17; index++)
+		{
+			int legOneEnd = getEnd(0, thisLegTimes.size(), BUFFER_SIZE, index);
+			int legTwoStart = getStart(0, thisLegTimes.size(), BUFFER_SIZE, index);
+
+			// what's the total score for slicing at this index?
+			double sum = sliceLeg(index, thisLegBearings, thisLegTimes, BUFFER_SIZE,
+					legOneEnd, legTwoStart);
+
+			// is this better?
+			if ((sum > 0) && (sum < bestScore))
 			{
-				// what's the total score for slicing at this index?
-				double sum = sliceLeg(index, thisLegBearings, thisLegTimes, BUFFER_SIZE);
-				
-//				System.out.println("score at: " + dateF.format(new Date(thisLegTimes.get(index))) + " = " + sum);
-
-				// System.out.println("score for:" + dateF.format(new
-				// Date(thisLegTimes.get(index))) + " is " + sum);
-
-				// is this better?
-				if ((sum > 0) && (sum < bestScore))
-				{
-					// yes - store it.
-					bestScore = sum;
-					bestSlice = index;
-					sliceTime = thisLegTimes.get(index);
-				}
+				// yes - store it.
+				bestScore = sum;
+				bestSlice = index;
+				sliceTime = thisLegTimes.get(index);
+				bestLegOneEnd = thisLegTimes.get(legOneEnd);
+				bestLegTwoStart = thisLegTimes.get(legTwoStart);
 			}
+		}
 
-			// right, how did we get on?
-			if (sliceTime != -1)
+		// right, how did we get on?
+		if (sliceTime != -1)
+		{
+			System.out.println("  Best slice at:" + dateF.format(new Date(sliceTime))
+					+ " index:" + bestSlice + " score:" + bestScore + " whole leg:"
+					+ wholeLegScore);
+
+			// is this slice acceptable?
+			if (bestScore < wholeLegScore * RMS_ZIG_RATIO)
 			{
-				System.out.println("  Best slice at:"
-						+ dateF.format(new Date(sliceTime)) + " index:" + bestSlice
-						+ " score:" + bestScore);
-
-				// is this slice acceptable?
-				if (bestScore < RMS_ZIG_THRESHOLD)
-				{
-					legStorer.storeLeg(scenario, curStart, sliceTime, sensor, bestScore);
-
-					// move the leg start along a little, to allow for a turn
-					long newLegStart = sliceTime + 60000;
-					
-					// do we have enough to look at?
-					long remainingTime = curEnd - newLegStart;
-					
-					System.out.println("  about to slice, have " + (remainingTime / 1000) + " secs left");
-					
-					// try to slice it
-					sliceThis(scenario, newLegStart, curEnd, sensor, legStorer);
-				}
-				else
-				{
-					List<Double> trimLegBearings = sensor.extractBearings(curStart,
-							sliceTime);
-					List<Long> trimLegTimes = sensor.extractTimes(curStart, sliceTime);
-
-					// ok, see if we can reduce the buffer size
-					boolean found = false;
-					int bufferLen = 1;
-					int maxBuffer = Math.min(trimLegTimes.size() - 3, 7);
-
-					while (!found && bufferLen < maxBuffer)
-					{
-						List<Long> beforeTimes = trimLegTimes.subList(0,
-								trimLegTimes.size() - bufferLen);
-						List<Double> beforeBearings = trimLegBearings.subList(0,
-								trimLegTimes.size() - bufferLen);
-
-						// System.out.println(" trimming:" + _outDates(beforeTimes));
-
-						Minimisation beforeOptimiser = optimiseThis(beforeTimes,
-								beforeBearings, beforeBearings.get(0));
-						double sum = beforeOptimiser.getMinimum();
-
-						if (sum < RMS_ZIG_THRESHOLD)
-						{
-							// ok, we can move on.
-							found = true;
-							legStorer.storeLeg(scenario, curStart,
-									beforeTimes.get(beforeTimes.size() - 1), sensor, sum);
-							curStart = sliceTime + 1;
-						}
-
-						bufferLen++;
-					}
-
-					// ok, did we find anything?
-					if (found)
-					{
-						// ok, we'll automatically move along
-						sliceThis(scenario, curStart, curEnd, sensor, legStorer);
-					}
-					else
-					{
-						// right - it's damn impossible! force it to move along
-
-					}
-				}
+				legStorer.storeLeg(scenario, wholeStart, bestLegOneEnd, sensor,
+						bestScore);
+				legStorer.storeLeg(scenario, bestLegTwoStart, wholeEnd, sensor,
+						bestScore);
 			}
 			else
 			{
-				System.out.println("slicing complete, can't slice");
+				System.out.println("  trying to trim the slices");
+				List<Double> trimLegBearings = sensor.extractBearings(wholeStart,
+						sliceTime);
+				List<Long> trimLegTimes = sensor.extractTimes(wholeStart, sliceTime);
+
+				// ok, see if we can reduce the buffer size
+				boolean found = false;
+				int bufferLen = 1;
+				int maxBuffer = Math.min(trimLegTimes.size() - 3, 7);
+				long curStart = wholeStart;
+
+				while (!found && bufferLen < maxBuffer)
+				{
+					List<Long> beforeTimes = trimLegTimes.subList(0, trimLegTimes.size()
+							- bufferLen);
+					List<Double> beforeBearings = trimLegBearings.subList(0,
+							trimLegTimes.size() - bufferLen);
+
+//					todo - we should be comparing both slices here, not just the "before" one.
+					
+					// System.out.println(" trimming:" + _outDates(beforeTimes));
+
+					Minimisation beforeOptimiser = optimiseThis(beforeTimes,
+							beforeBearings, beforeBearings.get(0));
+					double sum = beforeOptimiser.getMinimum();
+
+					// if (sum < RMS_ZIG_THRESHOLD)
+					if (sum < wholeLegScore * RMS_ZIG_RATIO)
+					{
+						// ok, we can move on.
+						found = true;
+						legStorer.storeLeg(scenario, curStart,
+								beforeTimes.get(beforeTimes.size() - 1), sensor, sum);
+						legStorer.storeLeg(scenario, curStart,
+								beforeTimes.get(beforeTimes.size() - 1), sensor, sum);
+						curStart = sliceTime + 1;
+					}
+
+					bufferLen++;
+				}
+
+				// ok, did we find anything?
+				if (found)
+				{
+					// ok, we'll automatically move along
+					// sliceThis(scenario, curStart, curEnd, sensor, legStorer);
+				}
+				else
+				{
+					// right - we couldn't get a good slice. see what the whole score is
+					System.out.println("Couldn't slice: whole leg score:" + wholeLegScore
+							+ " best slice:" + bestScore);
+
+					// just store the whole slice
+					legStorer.storeLeg(scenario, wholeStart, wholeEnd, sensor,
+							wholeLegScore);
+
+				}
 			}
 		}
+		else
+		{
+			System.out.println("slicing complete, can't slice");
+		}
+		// }
+
+	}
+
+	private static void sliceThisConsumer(String scenario, long curStart,
+			long curEnd, Sensor sensor, LegStorer legStorer)
+	{
+		// System.out.println("  Trying to slice : "
+		// + dateF.format(new Date(curStart)) + " - "
+		// + dateF.format(new Date(curEnd)));// + " " + curStart + " to " +
+		// // curEnd);
+		//
+		// // ok, find the best slice
+		// // prepare the data
+		// List<Double> thisLegBearings = sensor.extractBearings(curStart, curEnd);
+		// List<Long> thisLegTimes = sensor.extractTimes(curStart, curEnd);
+		//
+		// if (thisLegBearings.size() == 0)
+		// return;
+		//
+		// Minimisation wholeLeg = optimiseThis(thisLegTimes, thisLegBearings,
+		// thisLegBearings.get(0));
+		// // is this slice acceptable?
+		// if (wholeLeg.getMinimum() < RMS_ZIG_THRESHOLD)
+		// {
+		// legStorer.storeLeg(scenario, curStart, curEnd, sensor,
+		// wholeLeg.getMinimum());
+		// }
+		// else
+		// {
+		// // ok, we'll have to slice it
+		// double bestScore = Double.MAX_VALUE;
+		// int bestSlice = -1;
+		// long sliceTime = -1;
+		//
+		// // find the optimal first slice
+		// for (int index = 0; index < thisLegTimes.size(); index++)
+		// // for (int index = 12; index < 17; index++)
+		// {
+		// // what's the total score for slicing at this index?
+		// double sum = sliceLeg(index, thisLegBearings, thisLegTimes, BUFFER_SIZE);
+		//
+		// // System.out.println("score at: " + dateF.format(new
+		// Date(thisLegTimes.get(index))) + " = " + sum);
+		//
+		// // System.out.println("score for:" + dateF.format(new
+		// // Date(thisLegTimes.get(index))) + " is " + sum);
+		//
+		// // is this better?
+		// if ((sum > 0) && (sum < bestScore))
+		// {
+		// // yes - store it.
+		// bestScore = sum;
+		// bestSlice = index;
+		// sliceTime = thisLegTimes.get(index);
+		// }
+		// }
+		//
+		// // right, how did we get on?
+		// if (sliceTime != -1)
+		// {
+		// System.out.println("  Best slice at:"
+		// + dateF.format(new Date(sliceTime)) + " index:" + bestSlice
+		// + " score:" + bestScore);
+		//
+		// // is this slice acceptable?
+		// if (bestScore < RMS_ZIG_THRESHOLD)
+		// {
+		// legStorer.storeLeg(scenario, curStart, sliceTime, sensor, bestScore);
+		//
+		// // move the leg start along a little, to allow for a turn
+		// long newLegStart = sliceTime + 60000;
+		//
+		// // do we have enough to look at?
+		// long remainingTime = curEnd - newLegStart;
+		//
+		// System.out.println("  about to slice, have " + (remainingTime / 1000) +
+		// " secs left");
+		//
+		// // try to slice it
+		// sliceThis(scenario, newLegStart, curEnd, sensor, legStorer);
+		// }
+		// else
+		// {
+		// List<Double> trimLegBearings = sensor.extractBearings(curStart,
+		// sliceTime);
+		// List<Long> trimLegTimes = sensor.extractTimes(curStart, sliceTime);
+		//
+		// // ok, see if we can reduce the buffer size
+		// boolean found = false;
+		// int bufferLen = 1;
+		// int maxBuffer = Math.min(trimLegTimes.size() - 3, 7);
+		//
+		// while (!found && bufferLen < maxBuffer)
+		// {
+		// List<Long> beforeTimes = trimLegTimes.subList(0,
+		// trimLegTimes.size() - bufferLen);
+		// List<Double> beforeBearings = trimLegBearings.subList(0,
+		// trimLegTimes.size() - bufferLen);
+		//
+		// // System.out.println(" trimming:" + _outDates(beforeTimes));
+		//
+		// Minimisation beforeOptimiser = optimiseThis(beforeTimes,
+		// beforeBearings, beforeBearings.get(0));
+		// double sum = beforeOptimiser.getMinimum();
+		//
+		// if (sum < RMS_ZIG_THRESHOLD)
+		// {
+		// // ok, we can move on.
+		// found = true;
+		// legStorer.storeLeg(scenario, curStart,
+		// beforeTimes.get(beforeTimes.size() - 1), sensor, sum);
+		// curStart = sliceTime + 1;
+		// }
+		//
+		// bufferLen++;
+		// }
+		//
+		// // ok, did we find anything?
+		// if (found)
+		// {
+		// // ok, we'll automatically move along
+		// sliceThis(scenario, curStart, curEnd, sensor, legStorer);
+		// }
+		// else
+		// {
+		// // right - it's damn impossible! force it to move along
+		//
+		// }
+		// }
+		// }
+		// else
+		// {
+		// System.out.println("slicing complete, can't slice");
+		// }
+		// }
 
 	}
 
@@ -690,6 +731,8 @@ public class ZigDetector
 	 * @param trialIndex
 	 * @param bearings
 	 * @param times
+	 * @param legOneEnd
+	 * @param legTwoStart
 	 * @param fittedQ
 	 * @param fittedP
 	 * @param overallScore
@@ -700,11 +743,8 @@ public class ZigDetector
 	 * @return
 	 */
 	private static double sliceLeg(int trialIndex, List<Double> bearings,
-			List<Long> times, int bufferSize)
+			List<Long> times, int bufferSize, int legOneEnd, int legTwoStart)
 	{
-
-		int legOneEnd = getEnd(0, times.size(), bufferSize, trialIndex);
-		int legTwoStart = getStart(0, times.size(), bufferSize, trialIndex);
 
 		List<Long> theseTimes = times;
 		List<Double> theseBearings = bearings;
@@ -714,8 +754,8 @@ public class ZigDetector
 		// if((legOneEnd == -1) || (legTwoStart == -1))
 		// return Double.MAX_VALUE;
 
-		double beforeScore = 0;
-		double afterScore = 0;
+		double beforeScore = Double.MAX_VALUE;
+		double afterScore = Double.MAX_VALUE;
 
 		@SuppressWarnings("unused")
 		String msg = dateF.format(thisD);
@@ -731,7 +771,7 @@ public class ZigDetector
 					beforeBearings.get(0));
 			beforeScore = beforeOptimiser.getMinimum();
 			msg += " BEFORE:" + dateF.format(times.get(0)) + "-"
-					+ dateF.format(times.get(legOneEnd)) + " ";
+					+ dateF.format(times.get(legOneEnd)) + " " + beforeScore;
 			// System.out.println(" before:" + _outDates(beforeTimes));
 		}
 
@@ -745,14 +785,28 @@ public class ZigDetector
 					afterBearings.get(0));
 			afterScore = afterOptimiser.getMinimum();
 			msg += " AFTER:" + dateF.format(times.get(legTwoStart)) + "-"
-					+ dateF.format(times.get(times.size() - 1)) + " ";
+					+ dateF.format(times.get(times.size() - 1)) + " " + afterScore;
 			// System.out.println(" after:" + _outDates(afterTimes));
 		}
 
 		// find the total error sum
 		double sum = beforeScore + afterScore;
 
-		// System.out.println(msg+ "SUM:" + sum);
+		// do we have both legs?
+		if ((legOneEnd != -1) && (legTwoStart != -1))
+		{
+			int beforeLen = theseTimes.subList(0, legOneEnd).size();
+			int afterLen = theseTimes.subList(legTwoStart, theseTimes.size() - 1)
+					.size();
+
+			int totalCuts = beforeLen + afterLen;
+
+			double beforeNormal = beforeScore * beforeLen / totalCuts;
+			double afterNormal = afterScore * afterLen / totalCuts;
+			sum = beforeNormal + afterNormal;
+		}
+
+		// System.out.println(msg+ " SUM:" + sum);
 
 		// DecimalFormat intF = new DecimalFormat("00");
 		// System.out.println("index:"
@@ -855,9 +909,9 @@ public class ZigDetector
 		CenteredMovingAverage ma = new CenteredMovingAverage(period);
 		for (int j = 0; j < measurements.length; j++)
 		{
-//			double d = measurements[j];
-//			ma.newNum(d);
-//			res[j] = ma.getAvg();
+			// double d = measurements[j];
+			// ma.newNum(d);
+			// res[j] = ma.getAvg();
 			res[j] = ma.average(j, measurements);
 		}
 		return res;
