@@ -1,44 +1,46 @@
+package org.debrief.legacy.zigDetector;
 /**
  * Created on 03/03/2015.
  */
 public class CenteredMovingAverage
 {
 
-	public static void main(String[] args)
+	public static void main(final String[] args)
 	{
 
-		double[] testData =
+		final double[] testData =
 		{ 1, 2, 3, 4, 5, 5, 4, 3, 2, 1 };
 
-		int[] windowSizes =
+		final int[] windowSizes =
 		{ 3, 5 };
 
-		for (int windSize : windowSizes)
+		for (final int windSize : windowSizes)
 		{
 
 			final CenteredMovingAverage cma = new CenteredMovingAverage(windSize);
 
 			for (int n = 0; n < testData.length; n++)
 			{
-				double avg = cma.average(n, testData);
-				String msg = String.format(
-						"The centered moving average with period %d and n %d is %f from %g",
-						cma.getPeriod(), n, avg, testData[n]);
+				final double avg = cma.average(n, testData);
+				final String msg = String
+						.format(
+								"The centered moving average with period %d and n %d is %f from %g",
+								cma.getPeriod(), n, avg, testData[n]);
 				System.out.println(msg);
 			}
 			System.out.println();
 		}
 	}
 
-	private int period;
+	private final int period;
 
-	public CenteredMovingAverage(int period)
+	public CenteredMovingAverage(final int period)
 	{
 		assert period > 0 : "Period must be a positive integer";
 		this.period = period;
 	}
 
-	public double average(int n, double[] data)
+	public double average(final int n, final double[] data)
 	{
 		assert n > 0 : "N must be a positive integer.";
 		assert data.length > 0 : "Data array must not be empty.";
@@ -80,21 +82,21 @@ public class CenteredMovingAverage
 		return sum / (lastForwardIndex - lastBackwardIndex + 1);
 	}
 
-	private int lastBackwardIndex(int period, int n)
-	{
-		int distance = (period - 1) / 2;
-		return n - distance;
-	}
-
-	private int lastForwardIndex(int period, int n)
-	{
-		int mod = (period - 1) % 2;
-		int distance = (period - 1) / 2;
-		return n + distance + mod;
-	}
-
 	public int getPeriod()
 	{
 		return period;
+	}
+
+	private int lastBackwardIndex(final int period, final int n)
+	{
+		final int distance = (period - 1) / 2;
+		return n - distance;
+	}
+
+	private int lastForwardIndex(final int period, final int n)
+	{
+		final int mod = (period - 1) % 2;
+		final int distance = (period - 1) / 2;
+		return n + distance + mod;
 	}
 }
