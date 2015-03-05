@@ -1,3 +1,4 @@
+package org.debrief.legacy.zigDetector;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;

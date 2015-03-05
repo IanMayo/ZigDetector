@@ -1,3 +1,4 @@
+package org.debrief.legacy.zigDetector;
 /**
  * Created by Bill on 1/23/2015.
  *A project to determine the Linear regression for maritime analytic using java
@@ -41,6 +42,322 @@ import flanagan.math.Minimisation;
 
 public class ZigDetectorTest
 {
+
+
+
+
+	private static final String OPTIMISER_THRESHOLD_STR = "Optim Thresh";
+
+	private static final String RMS_ZIG_RATIO_STR = "RMS Zig Ratio";
+
+	private static final String NOISE_SD_STR = "Noise SD";
+	// how much RMS error we require on the Atan Curve before we
+	// bother trying to slice the target leg
+	private static double RMS_ZIG_RATIO = 0.6;
+	// private static double RMS_ZIG_THRESHOLD = 0.005;
+
+	// when to let the optimiser relax
+	private static double OPTIMISER_TOLERANCE = 1e-6;
+
+	// the error we add on
+	private static double BRG_ERROR_SD = 0.0;
+
+	final static Long timeEnd = null; // osL1end;
+
+	final static SimpleDateFormat dateF = new SimpleDateFormat("HH:mm:ss");
+
+	final static DecimalFormat numF = new DecimalFormat(
+			" 0000.0000000;-0000.0000000");
+
+	public static void main(final String[] args) throws IOException
+	{
+		final ZigDetector detector = new ZigDetector();
+	
+		final String name = "Scen5";
+	
+		// load the data
+		final Track ownshipTrack = Track.read("data/" + name + "_Ownship.csv");
+		final Sensor sensor = new Sensor("data/" + name + "_Sensor.csv");
+	
+		// find the ownship legs
+		final List<LegOfData> ownshipLegs = detector.identifyOwnshipLegs(
+				ownshipTrack, 5);
+		// data.ownshipLegs = data.ownshipLegs.subList(2, 3);
+	
+		// get ready to store the new legs
+		final ILegStorer legStorer = new ILegStorer()
+		{
+			@Override
+			public void storeLeg(final String scenarioName, final long tStart,
+					final long tEnd, final Sensor sensor, final double rms)
+			{
+				System.out.println("Leg identified from " + new Date(tStart) + " to "
+						+ new Date(tEnd));
+			}
+		};
+	
+		// get ready to store the results runs
+		final TimeSeriesCollection legResults = new TimeSeriesCollection();
+	
+		// ok, work through the legs. In the absence of a Discrete
+		// Optimisation algorithm we're taking a brue force approach.
+		// Hopefully we can find an optimised alternative to this.
+		for (final Iterator<LegOfData> iterator2 = ownshipLegs.iterator(); iterator2
+				.hasNext();)
+		{
+			final LegOfData thisLeg = iterator2.next();
+	
+			// ok, slice the data for this leg
+			long legStart = thisLeg.getStart();
+			long legEnd = thisLeg.getEnd();
+	
+			// trim the start/end to the sensor data
+			legStart = Math.max(legStart, sensor.getTimes()[0]);
+			legEnd = Math
+					.min(legEnd, sensor.getTimes()[sensor.getTimes().length - 1]);
+	
+			detector.sliceThis(name, legStart, legEnd, sensor, legStorer,
+					RMS_ZIG_RATIO, OPTIMISER_TOLERANCE);
+	
+			// create a placeholder for the overall score for this leg
+			final TimeSeries atanBar = new TimeSeries("ATan " + thisLeg.getName());
+			legResults.addSeries(atanBar);
+	
+			// create a placeholder for the individual time slice experiments
+			final TimeSeries thisSeries = new TimeSeries(thisLeg.getName()
+					+ " Slices");
+			legResults.addSeries(thisSeries);
+		}
+	
+	}
+
+
+	public static void main2(final String[] args) throws Exception
+	{
+	
+		final ZigDetectorTest detectorTest = new ZigDetectorTest();
+		final ZigDetector detector = new ZigDetector();
+	
+		// capture the start time (used for time elapsed at the end)
+		final long startTime = System.currentTimeMillis();
+	
+		// create a holder for the data
+		final JFrame frame = createFrame();
+		frame.setLocation(600, 50);
+		final Container container = frame.getContentPane();
+	
+		// ok, insert a grid
+		final JPanel inGrid = new JPanel();
+		container.add(inGrid);
+		final GridLayout grid = new GridLayout(0, 2);
+		inGrid.setLayout(grid);
+	
+		final HashMap<String, ScenDataset> datasets = new HashMap<String, ScenDataset>();
+	
+		final ArrayList<String> scenarios = new ArrayList<String>();
+		// scenarios.add("Scen1");
+		// scenarios.add("Scen2a");
+		// scenarios.add("Scen2b");
+		// scenarios.add("Scen3");
+		// scenarios.add("Scen4");
+		scenarios.add("Scen5");
+	
+		// handler for slider changes
+		final NewValueListener newL = new NewValueListener()
+		{
+	
+			@Override
+			public void newValue(final String name, final double val)
+			{
+				switch (name)
+				{
+				case NOISE_SD_STR:
+					BRG_ERROR_SD = val;
+					break;
+				case RMS_ZIG_RATIO_STR:
+					RMS_ZIG_RATIO = val;
+					break;
+				case OPTIMISER_THRESHOLD_STR:
+					OPTIMISER_TOLERANCE = val;
+					break;
+				default:
+					// don't worry - we make it empty to force a refresh
+				}
+	
+				// create the ownship & target course data
+				final Iterator<ScenDataset> iterator = datasets.values().iterator();
+				while (iterator.hasNext())
+				{
+					// create somewhere to store it.
+					final ScenDataset data = iterator.next();
+	
+					// clear the identified legs - to show progress
+					Plotting.clearLegMarkers(data.targetPlot, data.bearingPlot);
+	
+					// update the title
+					final NumberFormat numF = new DecimalFormat("0.000");
+					final NumberFormat expF = new DecimalFormat("0.###E0");
+					final String title = data._name + " Noise:"
+							+ numF.format(BRG_ERROR_SD) + " Conv:"
+							+ expF.format(OPTIMISER_TOLERANCE) + " Zig:"
+							+ numF.format(RMS_ZIG_RATIO);
+					data.chartPanel.getChart().setTitle(title);
+					data.turnMarkers = new ArrayList<Long>();
+	
+					// get ready to store the new legs
+					data.legStorer = new LegStorer();
+	
+					// apply the error to the sensor data
+					data.sensor.applyError(BRG_ERROR_SD);
+	
+					// get ready to store the results runs
+					final TimeSeriesCollection legResults = new TimeSeriesCollection();
+	
+					final TimeSeries rmsScores = new TimeSeries("RMS Errors");
+					data.legStorer.setRMSScores(rmsScores);
+					data.legStorer.setLegList(new ArrayList<LegOfData>());
+	
+					// ok, work through the legs. In the absence of a Discrete
+					// Optimisation
+					// algorithm we're taking a brue force approach.
+					// Hopefully Craig can find an optimised alternative to this.
+					for (final Iterator<LegOfData> iterator2 = data.ownshipLegs
+							.iterator(); iterator2.hasNext();)
+					{
+						final LegOfData thisLeg = iterator2.next();
+	
+						// ok, slice the data for this leg
+						long legStart = thisLeg.getStart();
+						long legEnd = thisLeg.getEnd();
+	
+						// trim the start/end to the sensor data
+						legStart = Math.max(legStart, data.sensor.getTimes()[0]);
+						legEnd = Math.min(legEnd,
+								data.sensor.getTimes()[data.sensor.getTimes().length - 1]);
+	
+						detector.sliceThis(data._name, legStart, legEnd, data.sensor,
+								data.legStorer, RMS_ZIG_RATIO, OPTIMISER_TOLERANCE);
+	
+						// create a placeholder for the overall score for this leg
+						final TimeSeries atanBar = new TimeSeries("ATan "
+								+ thisLeg.getName());
+						legResults.addSeries(atanBar);
+	
+						// create a placeholder for the individual time slice experiments
+						final TimeSeries thisSeries = new TimeSeries(thisLeg.getName()
+								+ " Slices");
+						legResults.addSeries(thisSeries);
+					}
+	
+					// plot the bearings
+					Plotting.showBearings(data.bearingPlot, data.sensor.getTimes(),
+							data.sensor.getBearings(), data.legStorer._rmsScores,
+							data.legStorer.getLegs());
+	
+					// ok, output the results
+					Plotting.plotLegPeriods(data.targetPlot, data.tgtTransColor,
+							data.legStorer._legList);
+				}
+			}
+		};
+	
+		// - ok insert the grid controls
+		inGrid.add(detectorTest.createControls(newL));
+	
+		// create the placeholders
+		for (final Iterator<String> iterator = scenarios.iterator(); iterator
+				.hasNext();)
+		{
+			final String name = iterator.next();
+	
+			// create somewhere to store it.
+			final ScenDataset data = new ScenDataset(name);
+	
+			// store it
+			datasets.put(name, data);
+	
+			// ok - create the placeholder
+			final CombinedDomainXYPlot combinedPlot = Plotting.createPlot();
+			data._plot = combinedPlot;
+	
+			data.chartPanel = new ChartPanel(new JFreeChart("Results for " + name
+					+ " Tol:" + OPTIMISER_TOLERANCE, JFreeChart.DEFAULT_TITLE_FONT,
+					combinedPlot, true))
+			{
+	
+				/**
+						 * 
+						 */
+				private static final long serialVersionUID = 1L;
+	
+				@Override
+				@Transient
+				public Dimension getPreferredSize()
+				{
+					return new Dimension(700, 500);
+				}
+	
+			};
+			inGrid.add(data.chartPanel, BorderLayout.CENTER);
+		}
+	
+		// create the ownship & target course data
+		final Iterator<ScenDataset> iterator = datasets.values().iterator();
+		while (iterator.hasNext())
+		{
+			// create somewhere to store it.
+			final ScenDataset data = iterator.next();
+	
+			// load the data
+			data.ownshipTrack = Track.read("data/" + data._name + "_Ownship.csv");
+			data.targetTrack = Track.read("data/" + data._name + "_Target.csv");
+			data.sensor = new Sensor("data/" + data._name + "_Sensor.csv");
+	
+			// find the ownship legs
+			data.ownshipLegs = detector.identifyOwnshipLegs(data.ownshipTrack, 5);
+			// data.ownshipLegs = data.ownshipLegs.subList(2, 3);
+	
+			// ok, now for the ownship data
+			data.oShipColor = new Color(0f, 0f, 1.0f);
+			data.oShipTransColor = new Color(0f, 0f, 1.0f, 0.2f);
+			data.ownshipPlot = Plotting.plotSingleVesselData(data._plot, "O/S",
+					data.ownshipTrack, data.oShipColor, null, timeEnd);
+	
+			// ok, now for the ownship legs
+			Plotting.plotLegPeriods(data.ownshipPlot, data.oShipTransColor,
+					data.ownshipLegs);
+	
+			// try to plot the moving average
+			// switch the courses to an n-term moving average
+			Plotting.addAverageCourse(data.ownshipPlot,
+					data.ownshipTrack.averageCourses, data.ownshipTrack.averageSpeeds,
+					data.ownshipTrack.getDates());
+	
+			// and the target plot
+			data.tgtColor = new Color(1.0f, 0f, 0f);
+			data.tgtTransColor = new Color(1.0f, 0f, 0f, 0.2f);
+			// data.targetPlot = Plotting.plotSingleVesselData(data._plot, "Tgt",
+			// data.targetTrack, data.tgtColor, null, timeEnd);
+	
+			// insert a bearing plot
+			data.bearingPlot = Plotting.createBearingPlot(data._plot);
+		}
+	
+		if (inGrid.getComponentCount() == 1)
+		{
+			grid.setColumns(1);
+		}
+	
+		frame.pack();
+	
+		// ok, we should probably initialise it
+		newL.newValue("", 0);
+	
+		final long elapsed = System.currentTimeMillis() - startTime;
+		System.out.println("Elapsed:" + elapsed / 1000 + " secs");
+	
+	}
+
 
 	/**
 	 * local instance of leg storer, also collects some other performance data
@@ -91,140 +408,7 @@ public class ZigDetectorTest
 			}
 		}
 	}
-
-	protected static interface NewValueListener
-	{
-		public void newValue(String attribute, double val);
-	}
-
-	public static class ScenDataset
-	{
-		public XYPlot bearingPlot;
-		public ChartPanel chartPanel;
-		public Color tgtTransColor;
-		public Color tgtColor;
-		public Color oShipColor;
-		public Color oShipTransColor;
-		protected ArrayList<Long> turnMarkers;
-		protected LegStorer legStorer;
-		public XYPlot targetPlot;
-		public XYPlot ownshipPlot;
-		public List<LegOfData> ownshipLegs;
-		private final String _name;
-		CombinedDomainXYPlot _plot;
-		public Track ownshipTrack;
-		public Track targetTrack;
-		public Sensor sensor;
-
-		public ScenDataset(final String name)
-		{
-			_name = name;
-		}
-
-	}
-
-	protected static interface ValConverter
-	{
-		public double convert(int input);
-
-		int unConvert(double val);
-	}
-
-	private static final String OPTIMISER_THRESHOLD_STR = "Optim Thresh";
-
-	private static final String RMS_ZIG_RATIO_STR = "RMS Zig Ratio";
-
-	private static final String NOISE_SD_STR = "Noise SD";
-	// how much RMS error we require on the Atan Curve before we
-	// bother trying to slice the target leg
-	private static double RMS_ZIG_RATIO = 0.6;
-	// private static double RMS_ZIG_THRESHOLD = 0.005;
-
-	// when to let the optimiser relax
-	private static double OPTIMISER_TOLERANCE = 1e-6;
-
-	// the error we add on
-	private static double BRG_ERROR_SD = 0.0;
-
-	final static Long timeEnd = null; // osL1end;
-
-	final static SimpleDateFormat dateF = new SimpleDateFormat("HH:mm:ss");
-
-	final static DecimalFormat numF = new DecimalFormat(
-			" 0000.0000000;-0000.0000000");
-
-	@SuppressWarnings("unused")
-	private static TimeSeriesCollection _calculatePQ(final Track ownship,
-			final Track target, final List<LegOfData> ownshipLegs)
-	{
-		final TimeSeriesCollection ts = new TimeSeriesCollection();
-		final TimeSeries p = new TimeSeries("P-calc");
-		final TimeSeries q = new TimeSeries("Q-calc");
-		ts.addSeries(p);
-		ts.addSeries(q);
-
-		// ok, now loop through
-		final long[] oTimes = ownship.getDates();
-		final double[] oCourses = ownship.getCourses();
-		final double[] oSpeeds = ownship.getSpeeds();
-		final double[] tCourses = target.getCourses();
-		final double[] tSpeeds = target.getSpeeds();
-
-		final double[] oX = ownship.getX();
-		final double[] oY = ownship.getY();
-		final double[] tX = target.getX();
-		final double[] tY = target.getY();
-
-		Double R0 = null; // lMath.sqrt(Math.pow(oX[0], 2)+Math.pow(oY[0], 2));
-
-		int thisLeg = 0;
-
-		for (int i = 0; i < tY.length && thisLeg < ownshipLegs.size(); i++)
-		{
-			final long thisT = oTimes[i];
-
-			// ok, are we in a leg?
-			if (thisT < ownshipLegs.get(thisLeg).getStart())
-			{
-				// ok, ignore
-			}
-			else
-			{
-				// see which leg we're in
-				if (thisT < ownshipLegs.get(thisLeg).getEnd())
-				{
-					// hey, we're in the zone!
-					// do we know range zero?
-					if (R0 == null)
-					{
-						R0 = Math.sqrt(Math.pow(tX[i] - oX[i], 2)
-								+ Math.pow(tY[i] - oY[i], 2));
-					}
-
-					// now for the other calcs
-					final double xO = oSpeeds[i] * Math.sin(Math.toRadians(oCourses[i]));
-					final double yO = oSpeeds[i] * Math.cos(Math.toRadians(oCourses[i]));
-					final double xT = tSpeeds[i] * Math.sin(Math.toRadians(tCourses[i]));
-					final double yT = tSpeeds[i] * Math.cos(Math.toRadians(tCourses[i]));
-
-					final double P = (xT - xO) / R0;
-					final double Q = (yT - yO) / R0;
-
-					p.add(new FixedMillisecond(thisT), P);
-					q.add(new FixedMillisecond(thisT), Q);
-				}
-				else
-				{
-					// ok, we've passed the end of the previous leg!
-					thisLeg++;
-					R0 = null;
-				}
-			}
-		}
-
-		return ts;
-	}
-
+	
 	/**
 	 * @return a frame to contain the results
 	 */
@@ -245,294 +429,6 @@ public class ZigDetectorTest
 		frame.setLayout(new BorderLayout());
 
 		return frame;
-	}
-
-	public static void main(final String[] args) throws IOException
-	{
-		final ZigDetector detector = new ZigDetector();
-
-		final String name = "Scen5";
-
-		// load the data
-		final Track ownshipTrack = Track.read("data/" + name + "_Ownship.csv");
-		final Sensor sensor = new Sensor("data/" + name + "_Sensor.csv");
-
-		// find the ownship legs
-		final List<LegOfData> ownshipLegs = detector.identifyOwnshipLegs(
-				ownshipTrack, 5);
-		// data.ownshipLegs = data.ownshipLegs.subList(2, 3);
-
-		// get ready to store the new legs
-		final ILegStorer legStorer = new ILegStorer()
-		{
-			@Override
-			public void storeLeg(final String scenarioName, final long tStart,
-					final long tEnd, final Sensor sensor, final double rms)
-			{
-				System.out.println("Leg identified from " + new Date(tStart) + " to "
-						+ new Date(tEnd));
-			}
-		};
-
-		// get ready to store the results runs
-		final TimeSeriesCollection legResults = new TimeSeriesCollection();
-
-		// ok, work through the legs. In the absence of a Discrete
-		// Optimisation algorithm we're taking a brue force approach.
-		// Hopefully we can find an optimised alternative to this.
-		for (final Iterator<LegOfData> iterator2 = ownshipLegs.iterator(); iterator2
-				.hasNext();)
-		{
-			final LegOfData thisLeg = iterator2.next();
-
-			// ok, slice the data for this leg
-			long legStart = thisLeg.getStart();
-			long legEnd = thisLeg.getEnd();
-
-			// trim the start/end to the sensor data
-			legStart = Math.max(legStart, sensor.getTimes()[0]);
-			legEnd = Math
-					.min(legEnd, sensor.getTimes()[sensor.getTimes().length - 1]);
-
-			detector.sliceThis(name, legStart, legEnd, sensor, legStorer,
-					RMS_ZIG_RATIO, OPTIMISER_TOLERANCE);
-
-			// create a placeholder for the overall score for this leg
-			final TimeSeries atanBar = new TimeSeries("ATan " + thisLeg.getName());
-			legResults.addSeries(atanBar);
-
-			// create a placeholder for the individual time slice experiments
-			final TimeSeries thisSeries = new TimeSeries(thisLeg.getName()
-					+ " Slices");
-			legResults.addSeries(thisSeries);
-		}
-
-	}
-
-	public static void main2(final String[] args) throws Exception
-	{
-
-		final ZigDetectorTest detectorTest = new ZigDetectorTest();
-		final ZigDetector detector = new ZigDetector();
-
-		// capture the start time (used for time elapsed at the end)
-		final long startTime = System.currentTimeMillis();
-
-		// create a holder for the data
-		final JFrame frame = createFrame();
-		frame.setLocation(600, 50);
-		final Container container = frame.getContentPane();
-
-		// ok, insert a grid
-		final JPanel inGrid = new JPanel();
-		container.add(inGrid);
-		final GridLayout grid = new GridLayout(0, 2);
-		inGrid.setLayout(grid);
-
-		final HashMap<String, ScenDataset> datasets = new HashMap<String, ScenDataset>();
-
-		final ArrayList<String> scenarios = new ArrayList<String>();
-		// scenarios.add("Scen1");
-		// scenarios.add("Scen2a");
-		// scenarios.add("Scen2b");
-		// scenarios.add("Scen3");
-		// scenarios.add("Scen4");
-		scenarios.add("Scen5");
-
-		// handler for slider changes
-		final NewValueListener newL = new NewValueListener()
-		{
-
-			@Override
-			public void newValue(final String name, final double val)
-			{
-				switch (name)
-				{
-				case NOISE_SD_STR:
-					BRG_ERROR_SD = val;
-					break;
-				case RMS_ZIG_RATIO_STR:
-					RMS_ZIG_RATIO = val;
-					break;
-				case OPTIMISER_THRESHOLD_STR:
-					OPTIMISER_TOLERANCE = val;
-					break;
-				default:
-					// don't worry - we make it empty to force a refresh
-				}
-
-				// create the ownship & target course data
-				final Iterator<ScenDataset> iterator = datasets.values().iterator();
-				while (iterator.hasNext())
-				{
-					// create somewhere to store it.
-					final ScenDataset data = iterator.next();
-
-					// clear the identified legs - to show progress
-					Plotting.clearLegMarkers(data.targetPlot, data.bearingPlot);
-
-					// update the title
-					final NumberFormat numF = new DecimalFormat("0.000");
-					final NumberFormat expF = new DecimalFormat("0.###E0");
-					final String title = data._name + " Noise:"
-							+ numF.format(BRG_ERROR_SD) + " Conv:"
-							+ expF.format(OPTIMISER_TOLERANCE) + " Zig:"
-							+ numF.format(RMS_ZIG_RATIO);
-					data.chartPanel.getChart().setTitle(title);
-					data.turnMarkers = new ArrayList<Long>();
-
-					// get ready to store the new legs
-					data.legStorer = new LegStorer();
-
-					// apply the error to the sensor data
-					data.sensor.applyError(BRG_ERROR_SD);
-
-					// get ready to store the results runs
-					final TimeSeriesCollection legResults = new TimeSeriesCollection();
-
-					final TimeSeries rmsScores = new TimeSeries("RMS Errors");
-					data.legStorer.setRMSScores(rmsScores);
-					data.legStorer.setLegList(new ArrayList<LegOfData>());
-
-					// ok, work through the legs. In the absence of a Discrete
-					// Optimisation
-					// algorithm we're taking a brue force approach.
-					// Hopefully Craig can find an optimised alternative to this.
-					for (final Iterator<LegOfData> iterator2 = data.ownshipLegs
-							.iterator(); iterator2.hasNext();)
-					{
-						final LegOfData thisLeg = iterator2.next();
-
-						// ok, slice the data for this leg
-						long legStart = thisLeg.getStart();
-						long legEnd = thisLeg.getEnd();
-
-						// trim the start/end to the sensor data
-						legStart = Math.max(legStart, data.sensor.getTimes()[0]);
-						legEnd = Math.min(legEnd,
-								data.sensor.getTimes()[data.sensor.getTimes().length - 1]);
-
-						detector.sliceThis(data._name, legStart, legEnd, data.sensor,
-								data.legStorer, RMS_ZIG_RATIO, OPTIMISER_TOLERANCE);
-
-						// create a placeholder for the overall score for this leg
-						final TimeSeries atanBar = new TimeSeries("ATan "
-								+ thisLeg.getName());
-						legResults.addSeries(atanBar);
-
-						// create a placeholder for the individual time slice experiments
-						final TimeSeries thisSeries = new TimeSeries(thisLeg.getName()
-								+ " Slices");
-						legResults.addSeries(thisSeries);
-					}
-
-					// plot the bearings
-					Plotting.showBearings(data.bearingPlot, data.sensor.getTimes(),
-							data.sensor.getBearings(), data.legStorer._rmsScores,
-							data.legStorer.getLegs());
-
-					// ok, output the results
-					Plotting.plotLegPeriods(data.targetPlot, data.tgtTransColor,
-							data.legStorer._legList);
-				}
-			}
-		};
-
-		// - ok insert the grid controls
-		inGrid.add(detectorTest.createControls(newL));
-
-		// create the placeholders
-		for (final Iterator<String> iterator = scenarios.iterator(); iterator
-				.hasNext();)
-		{
-			final String name = iterator.next();
-
-			// create somewhere to store it.
-			final ScenDataset data = new ScenDataset(name);
-
-			// store it
-			datasets.put(name, data);
-
-			// ok - create the placeholder
-			final CombinedDomainXYPlot combinedPlot = Plotting.createPlot();
-			data._plot = combinedPlot;
-
-			data.chartPanel = new ChartPanel(new JFreeChart("Results for " + name
-					+ " Tol:" + OPTIMISER_TOLERANCE, JFreeChart.DEFAULT_TITLE_FONT,
-					combinedPlot, true))
-			{
-
-				/**
-						 * 
-						 */
-				private static final long serialVersionUID = 1L;
-
-				@Override
-				@Transient
-				public Dimension getPreferredSize()
-				{
-					return new Dimension(700, 500);
-				}
-
-			};
-			inGrid.add(data.chartPanel, BorderLayout.CENTER);
-		}
-
-		// create the ownship & target course data
-		final Iterator<ScenDataset> iterator = datasets.values().iterator();
-		while (iterator.hasNext())
-		{
-			// create somewhere to store it.
-			final ScenDataset data = iterator.next();
-
-			// load the data
-			data.ownshipTrack = Track.read("data/" + data._name + "_Ownship.csv");
-			data.targetTrack = Track.read("data/" + data._name + "_Target.csv");
-			data.sensor = new Sensor("data/" + data._name + "_Sensor.csv");
-
-			// find the ownship legs
-			data.ownshipLegs = detector.identifyOwnshipLegs(data.ownshipTrack, 5);
-			// data.ownshipLegs = data.ownshipLegs.subList(2, 3);
-
-			// ok, now for the ownship data
-			data.oShipColor = new Color(0f, 0f, 1.0f);
-			data.oShipTransColor = new Color(0f, 0f, 1.0f, 0.2f);
-			data.ownshipPlot = Plotting.plotSingleVesselData(data._plot, "O/S",
-					data.ownshipTrack, data.oShipColor, null, timeEnd);
-
-			// ok, now for the ownship legs
-			Plotting.plotLegPeriods(data.ownshipPlot, data.oShipTransColor,
-					data.ownshipLegs);
-
-			// try to plot the moving average
-			// switch the courses to an n-term moving average
-			Plotting.addAverageCourse(data.ownshipPlot,
-					data.ownshipTrack.averageCourses, data.ownshipTrack.averageSpeeds,
-					data.ownshipTrack.getDates());
-
-			// and the target plot
-			data.tgtColor = new Color(1.0f, 0f, 0f);
-			data.tgtTransColor = new Color(1.0f, 0f, 0f, 0.2f);
-			// data.targetPlot = Plotting.plotSingleVesselData(data._plot, "Tgt",
-			// data.targetTrack, data.tgtColor, null, timeEnd);
-
-			// insert a bearing plot
-			data.bearingPlot = Plotting.createBearingPlot(data._plot);
-		}
-
-		if (inGrid.getComponentCount() == 1)
-		{
-			grid.setColumns(1);
-		}
-
-		frame.pack();
-
-		// ok, we should probably initialise it
-		newL.newValue("", 0);
-
-		final long elapsed = System.currentTimeMillis() - startTime;
-		System.out.println("Elapsed:" + elapsed / 1000 + " secs");
-
 	}
 
 	public static String out(final Minimisation res)
@@ -608,5 +504,44 @@ public class ZigDetectorTest
 		panel.add(buttons, BorderLayout.EAST);
 
 		return panel;
+	}
+	
+
+	protected static interface NewValueListener
+	{
+		public void newValue(String attribute, double val);
+	}
+
+	public static class ScenDataset
+	{
+		public XYPlot bearingPlot;
+		public ChartPanel chartPanel;
+		public Color tgtTransColor;
+		public Color tgtColor;
+		public Color oShipColor;
+		public Color oShipTransColor;
+		protected ArrayList<Long> turnMarkers;
+		protected LegStorer legStorer;
+		public XYPlot targetPlot;
+		public XYPlot ownshipPlot;
+		public List<LegOfData> ownshipLegs;
+		private final String _name;
+		CombinedDomainXYPlot _plot;
+		public Track ownshipTrack;
+		public Track targetTrack;
+		public Sensor sensor;
+
+		public ScenDataset(final String name)
+		{
+			_name = name;
+		}
+
+	}
+
+	protected static interface ValConverter
+	{
+		public double convert(int input);
+
+		int unConvert(double val);
 	}
 }

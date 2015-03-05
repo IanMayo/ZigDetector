@@ -1,4 +1,4 @@
-import java.util.List;
+package org.debrief.legacy.zigDetector;
 
 public interface ILegStorer
 {

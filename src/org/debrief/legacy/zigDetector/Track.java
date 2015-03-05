@@ -1,3 +1,4 @@
+package org.debrief.legacy.zigDetector;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;

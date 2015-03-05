@@ -1,3 +1,4 @@
+package org.debrief.legacy.zigDetector;
 /**
  * Created on 03/03/2015.
  */
