@@ -2,7 +2,7 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 
 
-/** class to store a leg of ownship data
+/** class to store the time period representing a leg of ownship data
  * 
  * @author ian
  *
