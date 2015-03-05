@@ -72,6 +72,7 @@ public class ZigDetectorTest
 	public static void main(final String[] args) throws IOException
 	{
 		final ZigDetector detector = new ZigDetector();
+		final OwnshipLegDetector legDetector = new OwnshipLegDetector();
 	
 		final String name = "Scen5";
 	
@@ -80,8 +81,8 @@ public class ZigDetectorTest
 		final Sensor sensor = new Sensor("data/" + name + "_Sensor.csv");
 	
 		// find the ownship legs
-		final List<LegOfData> ownshipLegs = detector.identifyOwnshipLegs(
-				ownshipTrack, 5);
+		final List<LegOfData> ownshipLegs = legDetector.identifyOwnshipLegs(
+				ownshipTrack.getDates(), ownshipTrack.getSpeeds(), ownshipTrack.getCourses(), 5);
 		// data.ownshipLegs = data.ownshipLegs.subList(2, 3);
 	
 		// get ready to store the new legs
@@ -116,8 +117,12 @@ public class ZigDetectorTest
 			legEnd = Math
 					.min(legEnd, sensor.getTimes()[sensor.getTimes().length - 1]);
 	
+			final List<Double> thisLegBearings = sensor.extractBearings(legStart,
+					legEnd);
+			final List<Long> thisLegTimes = sensor.extractTimes(legStart, legEnd);
+
 			detector.sliceThis(name, legStart, legEnd, sensor, legStorer,
-					RMS_ZIG_RATIO, OPTIMISER_TOLERANCE);
+					RMS_ZIG_RATIO, OPTIMISER_TOLERANCE, thisLegTimes, thisLegBearings);
 	
 			// create a placeholder for the overall score for this leg
 			final TimeSeries atanBar = new TimeSeries("ATan " + thisLeg.getName());
@@ -137,6 +142,7 @@ public class ZigDetectorTest
 	
 		final ZigDetectorTest detectorTest = new ZigDetectorTest();
 		final ZigDetector detector = new ZigDetector();
+		final OwnshipLegDetector legDetector = new OwnshipLegDetector();
 	
 		// capture the start time (used for time elapsed at the end)
 		final long startTime = System.currentTimeMillis();
@@ -235,8 +241,12 @@ public class ZigDetectorTest
 						legEnd = Math.min(legEnd,
 								data.sensor.getTimes()[data.sensor.getTimes().length - 1]);
 	
-						detector.sliceThis(data._name, legStart, legEnd, data.sensor,
-								data.legStorer, RMS_ZIG_RATIO, OPTIMISER_TOLERANCE);
+						final List<Double> thisLegBearings = data.sensor.extractBearings(legStart,
+								legEnd);
+						final List<Long> thisLegTimes = data.sensor.extractTimes(legStart, legEnd);
+
+						detector.sliceThis(name, legStart, legEnd, data.sensor, data.legStorer,
+								RMS_ZIG_RATIO, OPTIMISER_TOLERANCE, thisLegTimes, thisLegBearings);
 	
 						// create a placeholder for the overall score for this leg
 						final TimeSeries atanBar = new TimeSeries("ATan "
@@ -314,7 +324,8 @@ public class ZigDetectorTest
 			data.sensor = new Sensor("data/" + data._name + "_Sensor.csv");
 	
 			// find the ownship legs
-			data.ownshipLegs = detector.identifyOwnshipLegs(data.ownshipTrack, 5);
+			data.ownshipLegs = legDetector.identifyOwnshipLegs(
+					data.ownshipTrack.getDates(), data.ownshipTrack.getSpeeds(), data.ownshipTrack.getCourses(), 5);
 			// data.ownshipLegs = data.ownshipLegs.subList(2, 3);
 	
 			// ok, now for the ownship data
@@ -329,9 +340,9 @@ public class ZigDetectorTest
 	
 			// try to plot the moving average
 			// switch the courses to an n-term moving average
-			Plotting.addAverageCourse(data.ownshipPlot,
-					data.ownshipTrack.averageCourses, data.ownshipTrack.averageSpeeds,
-					data.ownshipTrack.getDates());
+//			Plotting.addAverageCourse(data.ownshipPlot,
+//					data.ownshipTrack.averageCourses, data.ownshipTrack.averageSpeeds,
+//					data.ownshipTrack.getDates());
 	
 			// and the target plot
 			data.tgtColor = new Color(1.0f, 0f, 0f);

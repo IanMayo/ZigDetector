@@ -30,9 +30,8 @@ public class Track
 	final private double[] y;
 	final private double[] courses;
 	final private double[] speeds;
-	public double[] averageCourses;
-
-	public double[] averageSpeeds;
+//	public double[] averageCourses;
+//	public double[] averageSpeeds;
 
 	public Track(final String path) throws IOException
 	{
