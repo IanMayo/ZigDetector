@@ -2,6 +2,7 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 
 import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.DateTimeFormatter;
@@ -10,8 +11,10 @@ import au.com.bytecode.opencsv.CSVReader;
 
 public class Sensor {
 
-	private long[] date;
-	private double[] bearing;
+	private long[] times;
+	private double[] bearings;
+	private double[] rawBearings;
+	private final Random genny = new Random();
 
 	public Sensor(final String path) throws IOException {
 
@@ -36,15 +39,17 @@ public class Sensor {
 			int counter = 0;
 
 			// initializing the variables to hold data in the csv file
-			bearing = new double[content.size()];
-			date = new long[content.size()];
+			bearings = new double[content.size()];
+			rawBearings = new double[content.size()];
+			times = new long[content.size()];
 
 			for (Object object : content) {
 				row = (String[]) object;
 				/* parsing data from the list to the variables */
 				String thisDate = row[0].toString();
-				date[counter] = formatter.parseDateTime(thisDate).getMillis();
-				bearing[counter] = (Double.parseDouble(row[4].toString()));
+				times[counter] = formatter.parseDateTime(thisDate).getMillis();
+				bearings[counter] = (Double.parseDouble(row[4].toString()));
+				rawBearings[counter] = (Double.parseDouble(row[4].toString()));
 				counter++;
 			}
 		} finally {
@@ -53,32 +58,61 @@ public class Sensor {
 		}
 	}
 
+	/** generate a new set of bearings by applying the
+	 * provided SD to the raw bearings
+	 * @param sd
+	 */
+	public void applyError(double sd)
+	{
+		// loop through the bearings
+		for (int i = 0; i < rawBearings.length; i++)
+		{
+			double thisB = rawBearings[i];
+			// calc a new error
+			double thisBearing = thisB + genny.nextGaussian() * sd;
+			
+			// and store it
+			bearings[i] = thisBearing;
+			
+		}
+	}
+	
+	public long[] getTimes()
+	{
+		return times;
+	}
+	
+	public double[] getBearings()
+	{
+		return bearings;
+	}
+	
 	public List<Double> extractBearings(Long start, Long end) {
-		List<Double> bearings = new ArrayList<Double>();
+		List<Double> thisBearings = new ArrayList<Double>();
 		// ok, loop through our data
-		for (int i = 0; i < date.length; i++) {
-			long thisT = date[i];
+		for (int i = 0; i < times.length; i++) {
+			long thisT = times[i];
 			if((thisT >= start) && (thisT <= end))
 			{
-				bearings.add(bearing[i]);
+				thisBearings.add(bearings[i]);
 			}
 			
 		}
-		return bearings;
+		return thisBearings;
 	}
 
 	public List<Long> extractTimes(Long start, Long end) {
-		List<Long> times = new ArrayList<Long>();
+		List<Long> thisTimes = new ArrayList<Long>();
 		// ok, loop through our data
-		for (int i = 0; i < date.length; i++) {
-			long thisT = date[i];
+		for (int i = 0; i < times.length; i++) {
+			long thisT = times[i];
 			if((thisT >= start) && (thisT <= end))
 			{
-				times.add(date[i]);
+				thisTimes.add(times[i]);
 			}
 			
 		}
-		return times;
+		return thisTimes;
 	}
 
 

@@ -1,3 +1,4 @@
+import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.List;
@@ -14,6 +15,8 @@ public class Track {
 	final private double[] y;
 	final private double[] courses;
 	final private double[] speeds;
+	public double[] averageCourses;
+	public double[] averageSpeeds;
 
 	public long[] getDates() {
 		return dates;
@@ -35,6 +38,19 @@ public class Track {
 		return speeds;
 	}
 
+	public static Track read(String path) throws IOException
+	{
+		Track res = null;
+		// check it exists
+		File theFile = new File(path);
+		if(theFile.exists())
+		{
+			res = new Track(path);
+		}
+		
+		return res;
+	}
+	
 	public Track(final String path) throws IOException {
 
 		DateTimeFormatter formatter = DateTimeFormat
@@ -52,7 +68,8 @@ public class Track {
 		CSVReader csvReader = null;
 
 		try {
-			csvReader = new CSVReader(new FileReader(path), ',', '\'', 1);
+			FileReader fReader = new FileReader(path);
+			csvReader = new CSVReader(fReader, ',', '\'', 1);
 			final List<String[]> content = csvReader.readAll();
 			// variable to hold each row of the List while iterating through it
 			String[] row = null;

@@ -1,0 +1,20 @@
+I wish to be able to determine the time periods when a vessel is on steady course and speed.  
+
+I have measurements of course and speed against time in the file titled "Test Data Ownship.txt".
+
+The data in this file is in these columns:
+* Date/time (YYYYmmdd hhMMss)
+* name (text - ignore)
+* Position (x,y,z - ignore)
+* Course (degrees)
+* Speed (knots)
+* Other columns to be ignored
+
+As you can see from the data, there is noise in both course and speed data.
+
+By eye, I would judge the steady course/speed periods to approximately be:
+1400-1535
+1601-1644
+1709-1800
+
+Yes, the data is of very poor quality.

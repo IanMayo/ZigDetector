@@ -8,28 +8,34 @@ import java.awt.Color;
 import java.awt.Container;
 import java.awt.Dimension;
 import java.awt.GridLayout;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.beans.Transient;
 import java.text.DecimalFormat;
+import java.text.NumberFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Queue;
 
+import javax.swing.ButtonGroup;
 import javax.swing.JFrame;
+import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JRadioButton;
 
 import junit.framework.TestCase;
 
-import org.apache.commons.math3.linear.MatrixUtils;
-import org.apache.commons.math3.linear.RealMatrix;
-import org.apache.commons.math3.stat.regression.OLSMultipleLinearRegression;
 import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
 import org.jfree.chart.plot.CombinedDomainXYPlot;
+import org.jfree.chart.plot.XYPlot;
 import org.jfree.data.time.FixedMillisecond;
 import org.jfree.data.time.TimeSeries;
 import org.jfree.data.time.TimeSeriesCollection;
@@ -41,22 +47,56 @@ import flanagan.math.MinimisationFunction;
 public class ZigDetector
 {
 
+	private static final String OPTIMISER_THRESHOLD_STR = "Optim Thresh";
+
+	private static final String RMS_ZIG_ERROR_STR = "RMS Zig Error";
+
+	private static final String NOISE_SD_STR = "Noise SD";
+
+	private static final int BUFFER_SIZE = 5;
+
 	// how much RMS error we require on the Atan Curve before we
 	// bother trying to slice the target leg
-	private static final double ZIG_THRESHOLD = 0.01;
+	private static double RMS_ZIG_THRESHOLD = 2;
+	// private static double RMS_ZIG_THRESHOLD = 0.005;
 
 	// when to let the optimiser relax
-	private static final double CONVERGE_TOLERANCE = 1e-6;
+	private static double OPTIMISER_TOLERANCE = 1e-6;
 
+	// the error we add on
+	private static double BRG_ERROR_SD = 0.0;
 
 	final static Long timeEnd = null; // osL1end;
 
-	final static SimpleDateFormat dateF = new SimpleDateFormat("hh:mm:ss");
+	final static SimpleDateFormat dateF = new SimpleDateFormat("HH:mm:ss");
 	final static DecimalFormat numF = new DecimalFormat(
 			" 0000.0000000;-0000.0000000");
 
+	protected JPanel createControls(NewValueListener newListener)
+	{
+		JPanel panel = new JPanel();
+		panel.setLayout(new GridLayout(0, 1));
+
+		NumberFormat decFormat = new DecimalFormat("0.000");
+		NumberFormat expFormat = new DecimalFormat("0.000E00");
+
+		panel.add(createItem(NOISE_SD_STR, new double[]
+		{ 0d, 0.1d, 0.2d, 0.25d, 0.3d, 0.5, 2d }, newListener, decFormat,
+				BRG_ERROR_SD));
+		panel.add(createItem(OPTIMISER_THRESHOLD_STR, new double[]
+		{ 1e-4, 1e-5, 1e-6, 1e-7, 1e-8 }, newListener, expFormat,
+				OPTIMISER_TOLERANCE));
+		panel.add(createItem(RMS_ZIG_ERROR_STR, new double[]
+		{ 2, 1.6, 1.4, 1.2, 1.0, 0.8, 0.6 }, newListener, decFormat,
+				RMS_ZIG_THRESHOLD));
+
+		return panel;
+	}
+
 	public static void main(String[] args) throws Exception
 	{
+
+		final ZigDetector detector = new ZigDetector();
 
 		// capture the start time (used for time elapsed at the end)
 		long startTime = System.currentTimeMillis();
@@ -72,209 +112,837 @@ public class ZigDetector
 		GridLayout grid = new GridLayout(0, 2);
 		inGrid.setLayout(grid);
 
-		plotThis(inGrid, "Scen2a");
-		plotThis(inGrid, "Scen2b");
-//		plotThis(inGrid, "Scen1");
-		plotThis(inGrid, "Scen3");
-		 plotThis(inGrid, "Scen4");
+		final HashMap<String, ScenDataset> datasets = new HashMap<String, ScenDataset>();
+
+		ArrayList<String> scenarios = new ArrayList<String>();
+		// scenarios.add("Scen1");
+		// scenarios.add("Scen2a");
+		// scenarios.add("Scen2b");
+		// scenarios.add("Scen3");
+		// scenarios.add("Scen4");
+		scenarios.add("Scen5");
+
+		// handler for slider changes
+		NewValueListener newL = new NewValueListener()
+		{
+
+			@Override
+			public void newValue(String name, double val)
+			{
+				switch (name)
+				{
+				case NOISE_SD_STR:
+					BRG_ERROR_SD = val;
+					break;
+				case RMS_ZIG_ERROR_STR:
+					RMS_ZIG_THRESHOLD = val;
+					break;
+				case OPTIMISER_THRESHOLD_STR:
+					OPTIMISER_TOLERANCE = val;
+					break;
+				default:
+					// don't worry - we make it empty to force a refresh
+				}
+
+				// create the ownship & target course data
+				Iterator<ScenDataset> iterator = datasets.values().iterator();
+				while (iterator.hasNext())
+				{
+					// create somewhere to store it.
+					final ScenDataset data = iterator.next();
+
+					// clear the identified legs - to show progress
+					Plotting.clearLegMarkers(data.targetPlot);
+
+					// update the title
+					NumberFormat numF = new DecimalFormat("0.000");
+					NumberFormat expF = new DecimalFormat("0.###E0");
+					String title = data._name + " Noise:" + numF.format(BRG_ERROR_SD)
+							+ " Conv:" + expF.format(OPTIMISER_TOLERANCE) + " Zig:"
+							+ numF.format(RMS_ZIG_THRESHOLD);
+					data.chartPanel.getChart().setTitle(title);
+
+					data.turnMarkers = new ArrayList<Long>();
+
+					// get ready to store the new legs
+					data.legStorer = new LegStorer();
+
+					// apply the error to the sensor data
+					data.sensor.applyError(BRG_ERROR_SD);
+
+					// get ready to store the results runs
+					TimeSeriesCollection legResults = new TimeSeriesCollection();
+
+					TimeSeries rmsScores = new TimeSeries("RMS Errors");
+					data.legStorer.setRMSScores(rmsScores);
+					data.legStorer.setLegList(new ArrayList<LegOfData>());
+
+					// ok, work through the legs. In the absence of a Discrete
+					// Optimisation
+					// algorithm we're taking a brue force approach.
+					// Hopefully Craig can find an optimised alternative to this.
+					for (Iterator<LegOfData> iterator2 = data.ownshipLegs.iterator(); iterator2
+							.hasNext();)
+					{
+						LegOfData thisLeg = (LegOfData) iterator2.next();
+
+						// ok, slice the data for this leg
+						long legStart = thisLeg.getStart();
+						long legEnd = thisLeg.getEnd();
+
+						// trim the start/end to the sensor data
+						legStart = Math.max(legStart, data.sensor.getTimes()[0]);
+						legEnd = Math.min(legEnd,
+								data.sensor.getTimes()[data.sensor.getTimes().length - 1]);
+
+						sliceThis(data._name, legStart, legEnd, data.sensor, data.legStorer);
+
+						// create a placeholder for the overall score for this leg
+						TimeSeries atanBar = new TimeSeries("ATan " + thisLeg.getName());
+						legResults.addSeries(atanBar);
+
+						// create a placeholder for the individual time slice experiments
+						TimeSeries thisSeries = new TimeSeries(thisLeg.getName()
+								+ " Slices");
+						legResults.addSeries(thisSeries);
+					}
+
+					// plot the bearings
+					Plotting.showBearings(data.bearingPlot, data.sensor.getTimes(),
+							data.sensor.getBearings(), data.legStorer._rmsScores);
+
+					// ok, output the results
+					Plotting.plotLegPeriods(data.targetPlot, data.tgtTransColor,
+							data.legStorer._legList);
+				}
+			}
+		};
+
+		// - ok insert the grid controls
+		inGrid.add(detector.createControls(newL));
+
+		// create the placeholders
+		for (Iterator<String> iterator = scenarios.iterator(); iterator.hasNext();)
+		{
+			String name = (String) iterator.next();
+
+			// create somewhere to store it.
+			ScenDataset data = new ScenDataset(name);
+
+			// store it
+			datasets.put(name, data);
+
+			// ok - create the placeholder
+			CombinedDomainXYPlot combinedPlot = Plotting.createPlot();
+			data._plot = combinedPlot;
+
+			data.chartPanel = new ChartPanel(new JFreeChart("Results for " + name
+					+ " Tol:" + OPTIMISER_TOLERANCE, JFreeChart.DEFAULT_TITLE_FONT,
+					combinedPlot, true))
+			{
+
+				/**
+						 * 
+						 */
+				private static final long serialVersionUID = 1L;
+
+				@Override
+				@Transient
+				public Dimension getPreferredSize()
+				{
+					return new Dimension(700, 500);
+				}
+
+			};
+			inGrid.add(data.chartPanel, BorderLayout.CENTER);
+		}
+
+		// create the ownship & target course data
+		Iterator<ScenDataset> iterator = datasets.values().iterator();
+		while (iterator.hasNext())
+		{
+			// create somewhere to store it.
+			ScenDataset data = iterator.next();
+
+			// load the data
+			data.ownshipTrack = Track.read("data/" + data._name + "_Ownship.csv");
+			data.targetTrack = Track.read("data/" + data._name + "_Target.csv");
+			data.sensor = new Sensor("data/" + data._name + "_Sensor.csv");
+
+			// find the ownship legs
+			data.ownshipLegs = identifyOwnshipLegs(data.ownshipTrack, 5);
+//			data.ownshipLegs = data.ownshipLegs.subList(1, 2);
+
+			// ok, now for the ownship data
+			data.oShipColor = new Color(0f, 0f, 1.0f);
+			data.oShipTransColor = new Color(0f, 0f, 1.0f, 0.2f);
+			data.ownshipPlot = Plotting.plotSingleVesselData(data._plot, "O/S",
+					data.ownshipTrack, data.oShipColor, null, timeEnd);
+
+			// ok, now for the ownship legs
+			Plotting.plotLegPeriods(data.ownshipPlot, data.oShipTransColor,
+					data.ownshipLegs);
+
+			// try to plot the moving average
+			// switch the courses to an n-term moving average
+			Plotting.addAverageCourse(data.ownshipPlot,
+					data.ownshipTrack.averageCourses, data.ownshipTrack.averageSpeeds,
+					data.ownshipTrack.getDates());
+
+			// and the target plot
+			data.tgtColor = new Color(1.0f, 0f, 0f);
+			data.tgtTransColor = new Color(1.0f, 0f, 0f, 0.2f);
+			 data.targetPlot = Plotting.plotSingleVesselData(data._plot, "Tgt",
+			 data.targetTrack, data.tgtColor, null, timeEnd);
+
+			// insert a bearing plot
+			data.bearingPlot = Plotting.createBearingPlot(data._plot);
+		}
 
 		if (inGrid.getComponentCount() == 1)
 			grid.setColumns(1);
 
 		frame.pack();
 
+		// ok, we should probably initialise it
+		newL.newValue("", 0);
+
 		long elapsed = System.currentTimeMillis() - startTime;
 		System.out.println("Elapsed:" + elapsed / 1000 + " secs");
 
 	}
 
-	public static void plotThis(Container container, String scenario)
-			throws Exception
+	public static class ScenDataset
+	{
+		public XYPlot bearingPlot;
+		public ChartPanel chartPanel;
+		public Color tgtTransColor;
+		public Color tgtColor;
+		public Color oShipColor;
+		public Color oShipTransColor;
+		protected ArrayList<Long> turnMarkers;
+		protected LegStorer legStorer;
+		public XYPlot targetPlot;
+		public XYPlot ownshipPlot;
+		public List<LegOfData> ownshipLegs;
+		private String _name;
+		CombinedDomainXYPlot _plot;
+		public Track ownshipTrack;
+		public Track targetTrack;
+		public Sensor sensor;
+
+		public ScenDataset(String name)
+		{
+			_name = name;
+		}
+
+	}
+
+	public static class LegStorer
+	{
+		private ArrayList<LegOfData> _legList;
+		private TimeSeries _rmsScores;
+
+		public void storeLeg(String scenario, long tStart, long tEnd,
+				Sensor sensor, double rms)
+		{
+			System.out.println("Storing " + scenario + " : "
+					+ dateF.format(new Date(tStart)) + " - "
+					+ dateF.format(new Date(tEnd)));
+
+			_legList.add(new LegOfData("Leg-" + (_legList.size() + 1), tStart, tEnd));
+
+			// create some RMS error scores
+			List<Long> times = sensor.extractTimes(tStart, tEnd);
+			for (Iterator<Long> iterator = times.iterator(); iterator.hasNext();)
+			{
+				Long long1 = (Long) iterator.next();
+				_rmsScores.add(new FixedMillisecond(long1), rms);
+			}
+		}
+
+		public void setRMSScores(TimeSeries series)
+		{
+			_rmsScores = series;
+		}
+
+		public void setLegList(ArrayList<LegOfData> legList)
+		{
+			_legList = legList;
+		}
+
+		public List<LegOfData> getLegs()
+		{
+			return _legList;
+		}
+	}
+
+	// public void plotThis(Container container, String scenario, LegStorer
+	// legStorer)
+	// throws Exception
+	// {
+	//
+	// // load the data
+	// Track ownshipTrack = new Track("data/" + scenario + "_Ownship.csv");
+	// Track targetTrack = new Track("data/" + scenario + "_Target.csv");
+	// Sensor sensor = new Sensor("data/" + scenario + "_Sensor.csv");
+	//
+	// // slice the target legs, to help assess performance
+	//
+	// // Now, we have to slice the data into ownship legs
+	// // List<LegOfData> targetLegs = calculateLegs(targetTrack);
+	// List<LegOfData> ownshipLegs = identifyLegs(ownshipTrack);
+	// // ownshipLegs = ownshipLegs.subList(1, 2); // just play with the first leg
+	//
+	// // create the combined plot - where we show all our data
+	// CombinedDomainXYPlot combinedPlot = Plotting.createPlot();
+	//
+	// // get ready to store the results runs
+	// TimeSeriesCollection legResults = new TimeSeriesCollection();
+	//
+	// TimeSeries rmsScores = new TimeSeries("RMS Errors");
+	// legStorer.setRMSScores(rmsScores);
+	//
+	// List<Long> turnMarkers = new ArrayList<Long>();
+	// legStorer.setLegList(new ArrayList<LegOfData>());
+	//
+	// // ok, work through the legs. In the absence of a Discrete Optimisation
+	// // algorithm we're taking a brue force approach.
+	// // Hopefully Craig can find an optimised alternative to this.
+	// for (Iterator<LegOfData> iterator = ownshipLegs.iterator(); iterator
+	// .hasNext();)
+	// {
+	// LegOfData thisLeg = (LegOfData) iterator.next();
+	//
+	// // ok, slice the data for this leg
+	// sliceThis(scenario, thisLeg.getStart(), thisLeg.getEnd(), sensor,
+	// legStorer);
+	//
+	// // create a placeholder for the overall score for this leg
+	// TimeSeries atanBar = new TimeSeries("ATan " + thisLeg.getName());
+	// legResults.addSeries(atanBar);
+	//
+	// // create a placeholder for the individual time slice experiments
+	// TimeSeries thisSeries = new TimeSeries(thisLeg.getName() + " Slices");
+	// legResults.addSeries(thisSeries);
+	//
+	// }
+	//
+	// // show the track data (it contains the results)
+	// Plotting.plotSingleVesselData(combinedPlot, "O/S", ownshipTrack, new Color(
+	// 0f, 0f, 1.0f), null, timeEnd);
+	//
+	// Plotting.plotSingleVesselData(combinedPlot, "Tgt", targetTrack, new Color(
+	// 1.0f, 0f, 0f), null, timeEnd);
+	//
+	// Plotting.plotSensorData(combinedPlot, sensor.getTimes(),
+	// sensor.getBearings(), rmsScores);
+	//
+	// // insert the calculated P & Q
+	// // Plotting.plotPQData(combinedPlot, "Calculated", pqSeriesColl, null);
+	//
+	// // ok, also plot the leg attempts
+	// Plotting.addLegResults(combinedPlot, legResults, turnMarkers);
+	//
+	// // wrap the combined chart
+	// ChartPanel cp = new ChartPanel(new JFreeChart("Results for " + scenario
+	// + " Tol:" + OPTIMISER_TOLERANCE, JFreeChart.DEFAULT_TITLE_FONT,
+	// combinedPlot, true))
+	// {
+	//
+	// /**
+	// *
+	// */
+	// private static final long serialVersionUID = 1L;
+	//
+	// @Override
+	// @Transient
+	// public Dimension getPreferredSize()
+	// {
+	// return new Dimension(700, 500);
+	// }
+	//
+	// };
+	// container.add(cp, BorderLayout.CENTER);
+	//
+	// // BufferedImage wPic = ImageIO.read(new File("data/" + scenario +
+	// // "_plot.png"));
+	// // JLabel wIcon = new JLabel(new ImageIcon(wPic));
+	// // container.add(wIcon, BorderLayout.SOUTH);
+	//
+	// }
+
+	protected static interface ValConverter
+	{
+		public double convert(int input);
+
+		int unConvert(double val);
+	}
+
+	protected static interface NewValueListener
+	{
+		public void newValue(String attribute, double val);
+	}
+
+	protected JPanel createItem(final String label, final double[] values,
+			final NewValueListener listener, final NumberFormat numberFormat,
+			double startValue)
 	{
 
-		// load the data
-		Track ownshipTrack = new Track("data/" + scenario + "_Ownship.csv");
-		Track targetTrack = new Track("data/" + scenario + "_Target.csv");
-		Sensor sensor = new Sensor("data/" + scenario + "_Sensor.csv");
+		JPanel panel = new JPanel();
+		panel.setLayout(new BorderLayout());
+		panel.add(new JLabel(label), BorderLayout.WEST);
 
-		// slice the target legs, to help assess performance
-		List<LegOfData> targetLegs = calculateLegs(targetTrack);
-
-		// Now, we have to slice the data into ownship legs
-		List<LegOfData> ownshipLegs = calculateLegs(ownshipTrack);
-		// ownshipLegs = ownshipLegs.subList(0, 1); // just play with the first leg
-
-		// create the combined plot - where we show all our data
-		CombinedDomainXYPlot combinedPlot = Plotting.createPlot();
-
-		// ok create the plots of ownship & target tracks
-
-		// get ready to store the results runs
-		TimeSeriesCollection legResults = new TimeSeriesCollection();
-
-		TimeSeriesCollection pqSeriesColl = calculatePQ(ownshipTrack, targetTrack,
-				ownshipLegs);
-
-		// get ready to store the fitted P & Q
-		TimeSeries fittedBeforeP = new TimeSeries("P-bef-fit",
-				FixedMillisecond.class);
-		TimeSeries fittedBeforeQ = new TimeSeries("Q-bef-fit",
-				FixedMillisecond.class);
-		TimeSeries fittedAfterP = new TimeSeries("P-aft-fit",
-				FixedMillisecond.class);
-		TimeSeries fittedAfterQ = new TimeSeries("Q-aft-fit",
-				FixedMillisecond.class);
-
-		pqSeriesColl.addSeries(fittedBeforeP);
-		pqSeriesColl.addSeries(fittedBeforeQ);
-		pqSeriesColl.addSeries(fittedAfterP);
-		pqSeriesColl.addSeries(fittedAfterQ);
-
-		List<Long> valueMarkers = new ArrayList<Long>();
-
-		// ok, work through the legs. In the absence of a Discrete Optimisation
-		// algorithm we're taking a brue force approach.
-		// Hopefully Craig can find an optimised alternative to this.
-		for (Iterator<LegOfData> iterator = ownshipLegs.iterator(); iterator
-				.hasNext();)
+		JPanel buttons = new JPanel();
+		buttons.setLayout(new GridLayout(1, 0));
+		ButtonGroup bg = new ButtonGroup();
+		for (int i = 0; i < values.length; i++)
 		{
-			LegOfData thisLeg = (LegOfData) iterator.next();
+			final JRadioButton newB = new JRadioButton();
+			final double thisD = values[i];
+			newB.setText(numberFormat.format(values[i]));
+			if (thisD == startValue)
+				newB.setSelected(true);
+			newB.addActionListener(new ActionListener()
+			{
 
-			// ok, slice the data for this leg
-			List<Double> bearings = sensor.extractBearings(thisLeg.getStart(),
-					thisLeg.getEnd());
-			List<Long> times = sensor.extractTimes(thisLeg.getStart(),
-					thisLeg.getEnd());
+				@Override
+				public void actionPerformed(ActionEvent e)
+				{
+					System.out.println(label + " changed to:" + e.toString());
 
-			// find the error score for the overall leg
-			Minimisation wholeLegOptimiser = optimiseThis(times, bearings,
-					bearings.get(0));
+					if (newB.isSelected())
+					{
+						listener.newValue(label, thisD);
+					}
+				}
+			});
+			buttons.add(newB);
+			bg.add(newB);
+		}
 
-			// // find the RMS error for this arctan spline
-			// double splineError = splineErrorfor2(times, bearings,
-			// wholeLegOptimiser);
+		panel.add(buttons, BorderLayout.EAST);
 
-			System.out.println(scenario + " / " + thisLeg.getName() + " error:"
-					+ wholeLegOptimiser.getMinimum());
-			// System.out.println("&& Spline:" + splineError + " ArcTan:"
-			// + wholeLegOptimiser.getMinimum());
+		return panel;
+	}
 
-			// look at the individual scores (though they're not of interest)
-			// System.out.println("Whole Leg:" + thisLeg + " - " +
-			// out(wholeLegOptimiser));
+	private static void sliceThis(String scenario, long curStart, long curEnd,
+			Sensor sensor, LegStorer legStorer)
+	{
+		System.out.println("  Trying to slice : "
+				+ dateF.format(new Date(curStart)) + " - "
+				+ dateF.format(new Date(curEnd)));// + " " + curStart + " to " +
+																					// curEnd);
 
-			// we will try to beat this score, so set as very high number
+		// ok, find the best slice
+		// prepare the data
+		List<Double> thisLegBearings = sensor.extractBearings(curStart, curEnd);
+		List<Long> thisLegTimes = sensor.extractTimes(curStart, curEnd);
+
+		if (thisLegBearings.size() == 0)
+			return;
+
+		Minimisation wholeLeg = optimiseThis(thisLegTimes, thisLegBearings,
+				thisLegBearings.get(0));
+		// is this slice acceptable?
+		if (wholeLeg.getMinimum() < RMS_ZIG_THRESHOLD)
+		{
+			legStorer.storeLeg(scenario, curStart, curEnd, sensor,
+					wholeLeg.getMinimum());
+		}
+		else
+		{
+			// ok, we'll have to slice it
 			double bestScore = Double.MAX_VALUE;
-			int bestIndex = -1;
+			int bestSlice = -1;
+			long sliceTime = -1;
 
-			double legError = wholeLegOptimiser.getMinimum();
-			
-			// aah, only bother slicing it if we have a large enough RMS error
-			if(legError < ZIG_THRESHOLD)
-				continue;
-			
-
-			// create a placeholder for the overall score for this leg
-			TimeSeries atanBar = new TimeSeries("ATan " + thisLeg.getName(),
-					FixedMillisecond.class);
-			legResults.addSeries(atanBar);
-
-			// TimeSeries polyBar = new TimeSeries("RMS " + thisLeg.getName(),
-			// FixedMillisecond.class);
-			// legResults.addSeries(polyBar);
-
-			// create a placeholder for the individual time slice experiments
-			TimeSeries thisSeries = new TimeSeries(thisLeg.getName() + " Slices",
-					FixedMillisecond.class);
-			legResults.addSeries(thisSeries);
-
-			// loop through the values in this leg
-			// NOTE: this is a brute force algorithm - maybe we can find a
-			// Discrete Optimisation equivalent
-			for (int index = 0; index < times.size(); index++)
+			// find the optimal first slice
+			for (int index = 0; index < thisLegTimes.size(); index++)
+			// for (int index = 12; index < 17; index++)
 			{
 				// what's the total score for slicing at this index?
+				double sum = sliceLeg(index, thisLegBearings, thisLegTimes, BUFFER_SIZE);
+				
+//				System.out.println("score at: " + dateF.format(new Date(thisLegTimes.get(index))) + " = " + sum);
 
-				// if(index != 50)
-				// continue;
-				int legOneEnd = getEnd(0, times.size(), 5, index);
-				int legTwoStart = getStart(0, times.size(), 5, index);
-
-				// int legOneEnd = index - BUFFER_REGION / 2;
-				// legOneEnd = Math.max(legOneEnd, 4);
-				// int legTwoStart = legOneEnd + BUFFER_REGION;
-				// legTwoStart = Math.min(legTwoStart, endIndex - 4);
-
-				double sum = sliceLeg(legOneEnd, index, legTwoStart, bearings, times,
-						fittedBeforeP, fittedBeforeQ, fittedAfterP, fittedAfterQ);
-
-				thisSeries.add(new FixedMillisecond(times.get(index)), sum);
-				atanBar.add(new FixedMillisecond(times.get(index)), legError);
-				// polyBar.add(new FixedMillisecond(times.get(index)), splineError);
+				// System.out.println("score for:" + dateF.format(new
+				// Date(thisLegTimes.get(index))) + " is " + sum);
 
 				// is this better?
-				if (sum < bestScore)
+				if ((sum > 0) && (sum < bestScore))
 				{
 					// yes - store it.
 					bestScore = sum;
-					bestIndex = index;
+					bestSlice = index;
+					sliceTime = thisLegTimes.get(index);
 				}
 			}
 
-			// ok, decide if we should slice
-			// System.out.println("leg: " + thisLeg.getName() + " whole:" +
-			// overallScore + " best slice:" + bestScore);
+			// right, how did we get on?
+			if (sliceTime != -1)
+			{
+				System.out.println("  Best slice at:"
+						+ dateF.format(new Date(sliceTime)) + " index:" + bestSlice
+						+ " score:" + bestScore);
 
-			valueMarkers.add(times.get(bestIndex));
+				// is this slice acceptable?
+				if (bestScore < RMS_ZIG_THRESHOLD)
+				{
+					legStorer.storeLeg(scenario, curStart, sliceTime, sensor, bestScore);
+
+					// move the leg start along a little, to allow for a turn
+					long newLegStart = sliceTime + 60000;
+					
+					// do we have enough to look at?
+					long remainingTime = curEnd - newLegStart;
+					
+					System.out.println("  about to slice, have " + (remainingTime / 1000) + " secs left");
+					
+					// try to slice it
+					sliceThis(scenario, newLegStart, curEnd, sensor, legStorer);
+				}
+				else
+				{
+					List<Double> trimLegBearings = sensor.extractBearings(curStart,
+							sliceTime);
+					List<Long> trimLegTimes = sensor.extractTimes(curStart, sliceTime);
+
+					// ok, see if we can reduce the buffer size
+					boolean found = false;
+					int bufferLen = 1;
+					int maxBuffer = Math.min(trimLegTimes.size() - 3, 7);
+
+					while (!found && bufferLen < maxBuffer)
+					{
+						List<Long> beforeTimes = trimLegTimes.subList(0,
+								trimLegTimes.size() - bufferLen);
+						List<Double> beforeBearings = trimLegBearings.subList(0,
+								trimLegTimes.size() - bufferLen);
+
+						// System.out.println(" trimming:" + _outDates(beforeTimes));
+
+						Minimisation beforeOptimiser = optimiseThis(beforeTimes,
+								beforeBearings, beforeBearings.get(0));
+						double sum = beforeOptimiser.getMinimum();
+
+						if (sum < RMS_ZIG_THRESHOLD)
+						{
+							// ok, we can move on.
+							found = true;
+							legStorer.storeLeg(scenario, curStart,
+									beforeTimes.get(beforeTimes.size() - 1), sensor, sum);
+							curStart = sliceTime + 1;
+						}
+
+						bufferLen++;
+					}
+
+					// ok, did we find anything?
+					if (found)
+					{
+						// ok, we'll automatically move along
+						sliceThis(scenario, curStart, curEnd, sensor, legStorer);
+					}
+					else
+					{
+						// right - it's damn impossible! force it to move along
+
+					}
+				}
+			}
+			else
+			{
+				System.out.println("slicing complete, can't slice");
+			}
+		}
+
+	}
+
+	static Minimisation optimiseThis(List<Long> times, List<Double> bearings,
+			double initialBearing)
+	{
+		// Create instance of Minimisation
+		Minimisation min = new Minimisation();
+
+		// Create instace of class holding function to be minimised
+		FlanaganArctan funct = new FlanaganArctan(times, bearings);
+
+		// initial estimates
+		Double firstBearing = bearings.get(0);
+		double[] start =
+		{ firstBearing, 0.0D, 0.0D };
+
+		// initial step sizes
+		double[] step =
+		{ 0.2D, 0.3D, 0.3D };
+
+		// convergence tolerance
+		double ftol = OPTIMISER_TOLERANCE;
+
+		// Nelder and Mead minimisation procedure
+		min.nelderMead(funct, start, step, ftol);
+
+		return min;
+	}
+
+	/**
+	 * @param trialIndex
+	 * @param bearings
+	 * @param times
+	 * @param fittedQ
+	 * @param fittedP
+	 * @param overallScore
+	 *          the overall score for this leg
+	 * @param BUFFER_REGION
+	 * @param straightBar
+	 * @param thisSeries
+	 * @return
+	 */
+	private static double sliceLeg(int trialIndex, List<Double> bearings,
+			List<Long> times, int bufferSize)
+	{
+
+		int legOneEnd = getEnd(0, times.size(), bufferSize, trialIndex);
+		int legTwoStart = getStart(0, times.size(), bufferSize, trialIndex);
+
+		List<Long> theseTimes = times;
+		List<Double> theseBearings = bearings;
+
+		Date thisD = new Date(times.get(trialIndex));
+
+		// if((legOneEnd == -1) || (legTwoStart == -1))
+		// return Double.MAX_VALUE;
+
+		double beforeScore = 0;
+		double afterScore = 0;
+
+		@SuppressWarnings("unused")
+		String msg = dateF.format(thisD);
+
+		Minimisation beforeOptimiser = null;
+		Minimisation afterOptimiser = null;
+
+		if (legOneEnd != -1)
+		{
+			List<Long> beforeTimes = theseTimes.subList(0, legOneEnd);
+			List<Double> beforeBearings = theseBearings.subList(0, legOneEnd);
+			beforeOptimiser = optimiseThis(beforeTimes, beforeBearings,
+					beforeBearings.get(0));
+			beforeScore = beforeOptimiser.getMinimum();
+			msg += " BEFORE:" + dateF.format(times.get(0)) + "-"
+					+ dateF.format(times.get(legOneEnd)) + " ";
+			// System.out.println(" before:" + _outDates(beforeTimes));
+		}
+
+		if (legTwoStart != -1)
+		{
+			List<Long> afterTimes = theseTimes.subList(legTwoStart,
+					theseTimes.size() - 1);
+			List<Double> afterBearings = theseBearings.subList(legTwoStart,
+					theseTimes.size() - 1);
+			afterOptimiser = optimiseThis(afterTimes, afterBearings,
+					afterBearings.get(0));
+			afterScore = afterOptimiser.getMinimum();
+			msg += " AFTER:" + dateF.format(times.get(legTwoStart)) + "-"
+					+ dateF.format(times.get(times.size() - 1)) + " ";
+			// System.out.println(" after:" + _outDates(afterTimes));
+		}
+
+		// find the total error sum
+		double sum = beforeScore + afterScore;
+
+		// System.out.println(msg+ "SUM:" + sum);
+
+		// DecimalFormat intF = new DecimalFormat("00");
+		// System.out.println("index:"
+		// + intF.format(trialIndex)
+		// // + " time:" + times.get(trialIndex)
+		// + " " + " Sum:" + numF.format(sum) + " index:"
+		// + dateF.format(new Date(times.get(trialIndex))) + " before:"
+		// + outDates(beforeTimes) + out(beforeOptimiser) + " num:"
+		// + intF.format(beforeTimes.size()) + " after:" + outDates(afterTimes)
+		// + out(afterOptimiser) + " num:" + intF.format(afterTimes.size()));
+
+		return sum;
+	}
+
+	/**
+	 * slice this data into ownship legs, where the course and speed are
+	 * relatively steady
+	 * 
+	 * @param course_degs
+	 * @param speed
+	 * @param bearings
+	 * @param elapsedTimes
+	 * @return
+	 */
+	private static List<LegOfData> identifyOwnshipLegs(Track track, int avgPeriod)
+	{
+
+		final double COURSE_TOLERANCE = 0.1; // degs / sec (just a guess!!)
+		final double SPEED_TOLERANCE = 0.01; // knots / sec (just a guess!!)
+
+		double lastCourse = 0;
+		double lastSpeed = 0;
+		long lastTime = 0;
+
+		List<LegOfData> legs = new ArrayList<LegOfData>();
+		legs.add(new LegOfData("Leg-1"));
+
+		long[] times = track.getDates();
+		double[] speeds = track.getSpeeds();
+		double[] courses = track.getCourses();
+
+		// switch the courses to an n-term moving average
+		courses = movingAverage(courses, avgPeriod);
+		track.averageCourses = courses;
+
+		speeds = movingAverage(speeds, avgPeriod);
+		track.averageSpeeds = speeds;
+
+		for (int i = 0; i < times.length; i++)
+		{
+			long thisTime = times[i];
+
+			double thisSpeed = speeds[i];
+			double thisCourse = courses[i];
+
+			if (i > 0)
+			{
+				// ok, check out the course change rate
+				double timeStepSecs = (thisTime - lastTime) / 1000;
+				double courseRate = Math.abs(thisCourse - lastCourse) / timeStepSecs;
+				double speedRate = Math.abs(thisSpeed - lastSpeed) / timeStepSecs;
+
+				// are they out of range
+				if ((courseRate < COURSE_TOLERANCE) && (speedRate < SPEED_TOLERANCE))
+				{
+					// ok, we're on a new leg - drop the current one
+					legs.get(legs.size() - 1).add(thisTime);
+				}
+				else
+				{
+					// we may be in a turn. create a new leg, if we haven't done
+					// so already
+					if (legs.get(legs.size() - 1).initialised())
+					{
+						legs.add(new LegOfData("Leg-" + (legs.size() + 1)));
+					}
+				}
+			}
+
+			// ok, store the values
+			lastTime = thisTime;
+			lastCourse = thisCourse;
+			lastSpeed = thisSpeed;
 
 		}
 
-		// show the track data (it contains the results)
-		Plotting.plotSingleVesselData(combinedPlot, "O/S", ownshipTrack,
-				ownshipLegs, new Color(0f, 0f, 1.0f, 0.2f), new Color(0f, 0f, 1.0f),
-				null, timeEnd);
+		return legs;
+	}
 
-		Plotting.plotSingleVesselData(combinedPlot, "Tgt", targetTrack, targetLegs,
-				new Color(1.0f, 0f, 0f, 0.2f), new Color(1.0f, 0f, 0f), valueMarkers,
-				timeEnd);
-
-		// insert the calculated P & Q
-		// Plotting.plotPQData(combinedPlot, "Calculated", pqSeriesColl, null);
-
-		// ok, also plot the leg attempts
-		Plotting.addLegResults(combinedPlot, legResults, valueMarkers);
-
-		// wrap the combined chart
-		ChartPanel cp = new ChartPanel(new JFreeChart("Results for " + scenario
-				+ " Tol:" + CONVERGE_TOLERANCE, JFreeChart.DEFAULT_TITLE_FONT,
-				combinedPlot, true))
+	/**
+	 * create a moving average over the set of dat measurements
+	 * 
+	 * @param measurements
+	 * @param period
+	 * @return
+	 */
+	private static double[] movingAverage(double[] measurements, int period)
+	{
+		double[] res = new double[measurements.length];
+		CenteredMovingAverage ma = new CenteredMovingAverage(period);
+		for (int j = 0; j < measurements.length; j++)
 		{
+//			double d = measurements[j];
+//			ma.newNum(d);
+//			res[j] = ma.getAvg();
+			res[j] = ma.average(j, measurements);
+		}
+		return res;
+	}
 
-			/**
-					 * 
-					 */
-			private static final long serialVersionUID = 1L;
+	public static int getStart(int start, int end, int buffer, int index)
+	{
+		int res = -1;
+		int MIN_SIZE = 3;
+		int semiBuffer = buffer / 2;
 
-			@Override
-			@Transient
-			public Dimension getPreferredSize()
+		int lastPossibleStartPoint = end - (MIN_SIZE - 1);
+
+		if (index + semiBuffer < lastPossibleStartPoint)
+		{
+			res = index + semiBuffer + 1;
+		}
+		return res;
+	}
+
+	public static int getEnd(int start, int end, int buffer, int index)
+	{
+		int res = -1;
+		int MIN_SIZE = 3;
+		int semiBuffer = buffer / 2;
+
+		int earliestPossibleStartPoint = start + (MIN_SIZE - 1);
+
+		if (index - semiBuffer > earliestPossibleStartPoint)
+		{
+			res = index - semiBuffer - 1;
+		}
+		return res;
+	}
+
+	private static class FlanaganArctan implements MinimisationFunction
+	{
+		final private List<Long> _times;
+		final private List<Double> _bearings;
+
+		public FlanaganArctan(List<Long> beforeTimes, List<Double> beforeBearings)
+		{
+			_times = beforeTimes;
+			_bearings = beforeBearings;
+		}
+
+		// evaluation function
+		public double function(double[] point)
+		{
+			double B = point[0];
+			double P = point[1];
+			double Q = point[2];
+
+			double runningSum = 0;
+
+			// ok, loop through the data
+			for (int i = 0; i < _times.size(); i++)
 			{
-				return new Dimension(700, 500);
+				long elapsedMillis = _times.get(i) - _times.get(0);
+				double elapsedSecs = elapsedMillis / 1000d;
+				double thisForecast = calcForecast(B, P, Q, elapsedSecs);
+				double thisMeasured = _bearings.get(i);
+				double thisError = thisForecast - thisMeasured;
+				if (thisError > 180)
+				{
+					thisError -= 360;
+				}
+				else if (thisError < -180)
+				{
+					thisError += 360;
+				}
+				double sqError = Math.pow(thisError, 2);
+				runningSum += sqError;
 			}
+			double mean = runningSum / _times.size();
 
-		};
-		container.add(cp, BorderLayout.CENTER);
-
-		// BufferedImage wPic = ImageIO.read(new File("data/" + scenario +
-		// "_plot.png"));
-		// JLabel wIcon = new JLabel(new ImageIcon(wPic));
-		// container.add(wIcon, BorderLayout.SOUTH);
+			double rms = Math.sqrt(mean);
+			return rms;
+		}
 
 	}
 
 	@SuppressWarnings("unused")
-	private static double splineErrorfor(List<Long> times, List<Double> bearings,
-			Minimisation wholeLegOptimiser)
+	private static double _splineErrorfor(List<Long> times,
+			List<Double> bearings, Minimisation wholeLegOptimiser)
 	{
 		long startTime = times.get(0);
 
@@ -335,93 +1003,21 @@ public class ZigDetector
 		return runningSum;
 	}
 
-	public interface TrendLine
+	private static double calcForecast(double B, double P, double Q,
+			double elapsedSecs)
 	{
-		public void setValues(double[] y, double[] x); // y ~ f(x)
-
-		public double predict(double x); // get a predicted y for a given x
+		double dX = Math.cos(Math.toRadians(B)) + Q * elapsedSecs;
+		double dY = Math.sin(Math.toRadians(B)) + P * elapsedSecs;
+		return Math.toDegrees(Math.atan2(dY, dX));
 	}
 
-	public static abstract class OLSTrendLine implements TrendLine
-	{
-
-		RealMatrix coef = null; // will hold prediction coefs once we get values
-
-		protected abstract double[] xVector(double x); // create vector of values
-		// from x
-
-		protected abstract boolean logY(); // set true to predict log of y (note: y
-		// must be positive)
-
-		public void setValues(double[] y, double[] x)
-		{
-			if (x.length != y.length)
-			{
-				throw new IllegalArgumentException(String.format(
-						"The numbers of y and x values must be equal (%d != %d)", y.length,
-						x.length));
-			}
-			double[][] xData = new double[x.length][];
-			for (int i = 0; i < x.length; i++)
-			{
-				// the implementation determines how to produce a vector of
-				// predictors from a single x
-				xData[i] = xVector(x[i]);
-			}
-			if (logY())
-			{ // in some models we are predicting ln y, so we replace
-				// each y with ln y
-				y = Arrays.copyOf(y, y.length); // user might not be finished with
-				// the array we were given
-				for (int i = 0; i < x.length; i++)
-				{
-					y[i] = Math.log(y[i]);
-				}
-			}
-			OLSMultipleLinearRegression ols = new OLSMultipleLinearRegression();
-			ols.setNoIntercept(true); // let the implementation include a constant
-			// in xVector if desired
-			ols.newSampleData(y, xData); // provide the data to the model
-			coef = MatrixUtils.createColumnRealMatrix(ols
-					.estimateRegressionParameters()); // get
-			// our
-			// coefs
-		}
-
-		public double predict(double x)
-		{
-			double yhat = coef.preMultiply(xVector(x))[0]; // apply coefs to xVector
-			if (logY())
-			{
-				yhat = (Math.exp(yhat)); // if we predicted ln y, we still need to
-			}
-			// get y
-			return yhat;
-		}
-	}
-
-	public static class PolyTrendLine extends OLSTrendLine
-	{
-		@Override
-		protected double[] xVector(double x)
-		{
-			return new double[]
-			{ 1, x };
-		}
-
-		@Override
-		protected boolean logY()
-		{
-			return true;
-		}
-	}
-
-	private static TimeSeriesCollection calculatePQ(Track ownship, Track target,
+	@SuppressWarnings("unused")
+	private static TimeSeriesCollection _calculatePQ(Track ownship, Track target,
 			List<LegOfData> ownshipLegs)
 	{
 		TimeSeriesCollection ts = new TimeSeriesCollection();
-		TimeSeries p = new TimeSeries("P-calc", FixedMillisecond.class);
-		TimeSeries q = new TimeSeries("Q-calc", FixedMillisecond.class);
+		TimeSeries p = new TimeSeries("P-calc");
+		TimeSeries q = new TimeSeries("Q-calc");
 		ts.addSeries(p);
 		ts.addSeries(q);
 
@@ -487,233 +1083,6 @@ public class ZigDetector
 		return ts;
 	}
 
-	static Minimisation optimiseThis(List<Long> times, List<Double> bearings,
-			double initialBearing)
-	{
-		// Create instance of Minimisation
-		Minimisation min = new Minimisation();
-
-		// Create instace of class holding function to be minimised
-		FlanaganArctan funct = new FlanaganArctan(times, bearings);
-
-		// initial estimates
-		Double firstBearing = bearings.get(0);
-		double[] start =
-		{ firstBearing, 0.0D, 0.0D };
-
-		// initial step sizes
-		double[] step =
-		{ 0.2D, 0.3D, 0.3D };
-
-		// convergence tolerance
-		double ftol = CONVERGE_TOLERANCE;
-
-		// Nelder and Mead minimisation procedure
-		min.nelderMead(funct, start, step, ftol);
-
-		return min;
-	}
-
-	/**
-	 * @param trialIndex
-	 * @param bearings
-	 * @param times
-	 * @param fittedQ
-	 * @param fittedP
-	 * @param fittedAfterQ
-	 * @param fittedAfterP
-	 * @param overallScore
-	 *          the overall score for this leg
-	 * @param BUFFER_REGION
-	 * @param straightBar
-	 * @param thisSeries
-	 * @return
-	 */
-	private static double sliceLeg(final int legOneEnd, int trialIndex,
-			final int legTwoStart, List<Double> bearings, List<Long> times,
-			TimeSeries fittedBeforeP, TimeSeries fittedBeforeQ,
-			TimeSeries fittedAfterP, TimeSeries fittedAfterQ)
-	{
-		List<Long> theseTimes = times;
-		List<Double> theseBearings = bearings;
-
-		Date thisD = new Date(times.get(trialIndex));
-
-		// if((legOneEnd == -1) || (legTwoStart == -1))
-		// return Double.MAX_VALUE;
-
-		double beforeScore = 0;
-		double afterScore = 0;
-
-		@SuppressWarnings("unused")
-		String msg = dateF.format(thisD);
-
-		if (legOneEnd != -1)
-		{
-			List<Long> beforeTimes = theseTimes.subList(0, legOneEnd);
-			List<Double> beforeBearings = theseBearings.subList(0, legOneEnd);
-			Minimisation beforeOptimiser = optimiseThis(beforeTimes, beforeBearings,
-					beforeBearings.get(0));
-			beforeScore = beforeOptimiser.getMinimum();
-			msg += " BEFORE:" + dateF.format(times.get(0)) + "-"
-					+ dateF.format(times.get(legOneEnd)) + " ";
-
-			fittedBeforeP.add(new FixedMillisecond(times.get(trialIndex)),
-					beforeOptimiser.getParamValues()[1]);
-			fittedBeforeQ.add(new FixedMillisecond(times.get(trialIndex)),
-					beforeOptimiser.getParamValues()[2]);
-		}
-
-		if (legTwoStart != -1)
-		{
-			List<Long> afterTimes = theseTimes.subList(legTwoStart,
-					theseTimes.size() - 1);
-			List<Double> afterBearings = theseBearings.subList(legTwoStart,
-					theseTimes.size() - 1);
-			Minimisation afterOptimiser = optimiseThis(afterTimes, afterBearings,
-					afterBearings.get(0));
-			afterScore = afterOptimiser.getMinimum();
-			msg += " AFTER:" + dateF.format(times.get(legTwoStart)) + "-"
-					+ dateF.format(times.get(times.size() - 1)) + " ";
-
-			fittedAfterP.add(new FixedMillisecond(times.get(trialIndex)),
-					afterOptimiser.getParamValues()[1]);
-			fittedAfterQ.add(new FixedMillisecond(times.get(trialIndex)),
-					afterOptimiser.getParamValues()[2]);
-		}
-
-		// find the total error sum
-		double sum = beforeScore + afterScore;
-
-		// System.out.println(msg+ "SUM:" + sum);
-
-		// DecimalFormat intF = new DecimalFormat("00");
-		// System.out.println("index:"
-		// + intF.format(trialIndex)
-		// // + " time:" + times.get(trialIndex)
-		// + " " + " Sum:" + numF.format(sum) + " index:"
-		// + dateF.format(new Date(times.get(trialIndex))) + " before:"
-		// + outDates(beforeTimes) + out(beforeOptimiser) + " num:"
-		// + intF.format(beforeTimes.size()) + " after:" + outDates(afterTimes)
-		// + out(afterOptimiser) + " num:" + intF.format(afterTimes.size()));
-
-		return sum;
-	}
-
-	@SuppressWarnings("unused")
-	private static String outDates(List<Long> times)
-	{
-		String res = dateF.format(times.get(0)) + "-"
-				+ dateF.format(times.get(times.size() - 1));
-		return res;
-	}
-
-	/**
-	 * slice this data into ownship legs, where the course and speed are
-	 * relatively steady
-	 * 
-	 * @param course_degs
-	 * @param speed
-	 * @param bearings
-	 * @param elapsedTimes
-	 * @return
-	 */
-	private static List<LegOfData> calculateLegs(Track track)
-	{
-
-		final double COURSE_TOLERANCE = 0.1; // degs / sec (just a guess!!)
-		final double SPEED_TOLERANCE = 2; // knots / sec (just a guess!!)
-
-		double lastCourse = 0;
-		double lastSpeed = 0;
-		long lastTime = 0;
-
-		List<LegOfData> legs = new ArrayList<LegOfData>();
-		legs.add(new LegOfData("Leg-1"));
-
-		long[] times = track.getDates();
-		double[] speeds = track.getSpeeds();
-		double[] courses = track.getCourses();
-
-		for (int i = 0; i < times.length; i++)
-		{
-			long thisTime = times[i];
-
-			double thisSpeed = speeds[i];
-			double thisCourse = courses[i];
-
-			if (i > 0)
-			{
-				// ok, check out the course change rate
-				double timeStepSecs = (thisTime - lastTime) / 1000;
-				double courseRate = Math.abs(thisCourse - lastCourse) / timeStepSecs;
-				double speedRate = Math.abs(thisSpeed - lastSpeed) / timeStepSecs;
-
-				// are they out of range
-				if ((courseRate < COURSE_TOLERANCE) && (speedRate < SPEED_TOLERANCE))
-				{
-					// ok, we're on a new leg - drop the current one
-					legs.get(legs.size() - 1).add(thisTime);
-				}
-				else
-				{
-					// we may be in a turn. create a new leg, if we haven't done
-					// so already
-					if (legs.get(legs.size() - 1).size() != 0)
-					{
-						legs.add(new LegOfData("Leg-" + (legs.size() + 1)));
-					}
-				}
-			}
-
-			// ok, store the values
-			lastTime = thisTime;
-			lastCourse = thisCourse;
-			lastSpeed = thisSpeed;
-
-		}
-
-		return legs;
-	}
-
-	private static class FlanaganArctan implements MinimisationFunction
-	{
-		final private List<Long> _times;
-		final private List<Double> _bearings;
-
-		public FlanaganArctan(List<Long> beforeTimes, List<Double> beforeBearings)
-		{
-			_times = beforeTimes;
-			_bearings = beforeBearings;
-		}
-
-		// evaluation function
-		public double function(double[] point)
-		{
-			double B = point[0];
-			double P = point[1];
-			double Q = point[2];
-
-			double runningSum = 0;
-
-			// ok, loop through the data
-			for (int i = 0; i < _times.size(); i++)
-			{
-				long elapsedMillis = _times.get(i) - _times.get(0);
-				double elapsedSecs = elapsedMillis / 1000d;
-				double thisForecast = calcForecast(B, P, Q, elapsedSecs);
-				double thisMeasured = _bearings.get(i);
-				double thisError = Math.pow(thisForecast - thisMeasured, 2);
-				runningSum += thisError;
-			}
-			double mean = runningSum / _times.size();
-
-			double rms = Math.sqrt(mean);
-			return rms;
-		}
-
-	}
-
 	/**
 	 * @return a frame to contain the results
 	 */
@@ -743,36 +1112,6 @@ public class ZigDetector
 				+ " Q:" + numF.format(key[2]) + " Sum:" + numF.format(res.getMinimum());
 
 		return out;
-	}
-
-	public static int getEnd(int start, int end, int buffer, int index)
-	{
-		int res = -1;
-		int MIN_SIZE = 3;
-		int semiBuffer = buffer / 2;
-
-		int earliestPossibleStartPoint = start + (MIN_SIZE - 1);
-
-		if (index - semiBuffer > earliestPossibleStartPoint)
-		{
-			res = index - semiBuffer - 1;
-		}
-		return res;
-	}
-
-	public static int getStart(int start, int end, int buffer, int index)
-	{
-		int res = -1;
-		int MIN_SIZE = 3;
-		int semiBuffer = buffer / 2;
-
-		int lastPossibleStartPoint = end - (MIN_SIZE - 1);
-
-		if (index + semiBuffer < lastPossibleStartPoint)
-		{
-			res = index + semiBuffer + 1;
-		}
-		return res;
 	}
 
 	public static class TestMe extends TestCase
@@ -818,15 +1157,16 @@ public class ZigDetector
 		}
 	}
 
-	private static double calcForecast(double B, double P, double Q,
-			double elapsedSecs)
+	@SuppressWarnings("unused")
+	private static String _outDates(List<Long> times)
 	{
-		double dX = Math.cos(Math.toRadians(B)) + Q * elapsedSecs;
-		double dY = Math.sin(Math.toRadians(B)) + P * elapsedSecs;
-		return Math.toDegrees(Math.atan2(dY, dX));
+		String res = dateF.format(times.get(0)) + "-"
+				+ dateF.format(times.get(times.size() - 1));
+		return res;
 	}
 
-	private static double splineErrorfor2(List<Long> times,
+	@SuppressWarnings("unused")
+	private static double _splineErrorfor2(List<Long> times,
 			List<Double> bearings, Minimisation wholeLegOptimiser)
 	{
 		long startTime = times.get(0);
@@ -857,4 +1197,34 @@ public class ZigDetector
 		return root;
 	}
 
+	public static class MovingAverage
+	{
+		private final Queue<Double> window = new LinkedList<Double>();
+		private final int period;
+		private double sum;
+
+		public MovingAverage(int period)
+		{
+			assert period > 0 : "Period must be a positive integer";
+			this.period = period;
+		}
+
+		public void newNum(double num)
+		{
+			sum += num;
+			window.add(num);
+			if (window.size() > period)
+			{
+				sum -= window.remove();
+			}
+		}
+
+		public double getAvg()
+		{
+			if (window.isEmpty())
+				return 0; // technically the average is undefined
+			return sum / window.size();
+		}
+
+	}
 }
