@@ -87,7 +87,8 @@ public class ZigDetector
 		{ 1e-4, 1e-5, 1e-6, 1e-7, 1e-8 }, newListener, expFormat,
 				OPTIMISER_TOLERANCE));
 		panel.add(createItem(RMS_ZIG_RATIO_STR, new double[]
-		{1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3 }, newListener, decFormat, RMS_ZIG_RATIO));
+		{ 1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3 }, newListener, decFormat,
+				RMS_ZIG_RATIO));
 
 		return panel;
 	}
@@ -270,7 +271,7 @@ public class ZigDetector
 
 			// find the ownship legs
 			data.ownshipLegs = identifyOwnshipLegs(data.ownshipTrack, 5);
-		//	 data.ownshipLegs = data.ownshipLegs.subList(2, 3);
+			// data.ownshipLegs = data.ownshipLegs.subList(2, 3);
 
 			// ok, now for the ownship data
 			data.oShipColor = new Color(0f, 0f, 1.0f);
@@ -497,72 +498,19 @@ public class ZigDetector
 			}
 			else
 			{
-				System.out.println("  trying to trim the slices");
-				List<Double> trimLegBearings = sensor.extractBearings(wholeStart,
-						sliceTime);
-				List<Long> trimLegTimes = sensor.extractTimes(wholeStart, sliceTime);
+				// right - we couldn't get a good slice. see what the whole score is
+				System.out.println("Couldn't slice: whole leg score:" + wholeLegScore
+						+ " best slice:" + bestScore);
 
-				// ok, see if we can reduce the buffer size
-				boolean found = false;
-				int bufferLen = 1;
-				int maxBuffer = Math.min(trimLegTimes.size() - 3, 7);
-				long curStart = wholeStart;
-
-				while (!found && bufferLen < maxBuffer)
-				{
-					List<Long> beforeTimes = trimLegTimes.subList(0, trimLegTimes.size()
-							- bufferLen);
-					List<Double> beforeBearings = trimLegBearings.subList(0,
-							trimLegTimes.size() - bufferLen);
-
-//					todo - we should be comparing both slices here, not just the "before" one.
-					
-					// System.out.println(" trimming:" + _outDates(beforeTimes));
-
-					Minimisation beforeOptimiser = optimiseThis(beforeTimes,
-							beforeBearings, beforeBearings.get(0));
-					double sum = beforeOptimiser.getMinimum();
-
-					// if (sum < RMS_ZIG_THRESHOLD)
-					if (sum < wholeLegScore * RMS_ZIG_RATIO)
-					{
-						// ok, we can move on.
-						found = true;
-						legStorer.storeLeg(scenario, curStart,
-								beforeTimes.get(beforeTimes.size() - 1), sensor, sum);
-						legStorer.storeLeg(scenario, curStart,
-								beforeTimes.get(beforeTimes.size() - 1), sensor, sum);
-						curStart = sliceTime + 1;
-					}
-
-					bufferLen++;
-				}
-
-				// ok, did we find anything?
-				if (found)
-				{
-					// ok, we'll automatically move along
-					// sliceThis(scenario, curStart, curEnd, sensor, legStorer);
-				}
-				else
-				{
-					// right - we couldn't get a good slice. see what the whole score is
-					System.out.println("Couldn't slice: whole leg score:" + wholeLegScore
-							+ " best slice:" + bestScore);
-
-					// just store the whole slice
-					legStorer.storeLeg(scenario, wholeStart, wholeEnd, sensor,
-							wholeLegScore);
-
-				}
+				// just store the whole slice
+				legStorer.storeLeg(scenario, wholeStart, wholeEnd, sensor,
+						wholeLegScore);
 			}
 		}
 		else
 		{
 			System.out.println("slicing complete, can't slice");
 		}
-		// }
-
 	}
 
 	private static void sliceThisConsumer(String scenario, long curStart,
@@ -947,33 +895,37 @@ public class ZigDetector
 		return res;
 	}
 
-	private static class FlanaganArctan implements MinimisationFunction
+	final private static class FlanaganArctan implements MinimisationFunction
 	{
-		final private List<Long> _times;
-		final private List<Double> _bearings;
+		final private Long[] _times;
+		final private Double[] _bearings;
 
-		public FlanaganArctan(List<Long> beforeTimes, List<Double> beforeBearings)
+		public FlanaganArctan(final List<Long> beforeTimes,
+				final List<Double> beforeBearings)
 		{
-			_times = beforeTimes;
-			_bearings = beforeBearings;
+			_times = beforeTimes.toArray(new Long[]
+			{});
+			_bearings = beforeBearings.toArray(new Double[]
+			{});
 		}
 
 		// evaluation function
 		public double function(double[] point)
 		{
-			double B = point[0];
-			double P = point[1];
-			double Q = point[2];
+			final double B = point[0];
+			final double P = point[1];
+			final double Q = point[2];
 
 			double runningSum = 0;
+			final Long firstTime = _times[0];
 
 			// ok, loop through the data
-			for (int i = 0; i < _times.size(); i++)
+			for (int i = 0; i < _times.length; i++)
 			{
-				long elapsedMillis = _times.get(i) - _times.get(0);
+				long elapsedMillis = _times[i] - firstTime;
 				double elapsedSecs = elapsedMillis / 1000d;
 				double thisForecast = calcForecast(B, P, Q, elapsedSecs);
-				double thisMeasured = _bearings.get(i);
+				double thisMeasured = _bearings[i];
 				double thisError = thisForecast - thisMeasured;
 				if (thisError > 180)
 				{
@@ -986,7 +938,7 @@ public class ZigDetector
 				double sqError = Math.pow(thisError, 2);
 				runningSum += sqError;
 			}
-			double mean = runningSum / _times.size();
+			double mean = runningSum / _times.length;
 
 			double rms = Math.sqrt(mean);
 			return rms;
