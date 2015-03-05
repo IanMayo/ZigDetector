@@ -8,7 +8,21 @@ import org.joda.time.format.DateTimeFormatter;
 
 import au.com.bytecode.opencsv.CSVReader;
 
-public class Track {
+public class Track
+{
+
+	public static Track read(final String path) throws IOException
+	{
+		Track res = null;
+		// check it exists
+		final File theFile = new File(path);
+		if (theFile.exists())
+		{
+			res = new Track(path);
+		}
+
+		return res;
+	}
 
 	final private long[] dates;
 	final private double[] x;
@@ -16,48 +30,17 @@ public class Track {
 	final private double[] courses;
 	final private double[] speeds;
 	public double[] averageCourses;
+
 	public double[] averageSpeeds;
 
-	public long[] getDates() {
-		return dates;
-	}
-
-	public double[] getX() {
-		return x;
-	}
-
-	public double[] getY() {
-		return y;
-	}
-
-	public double[] getCourses() {
-		return courses;
-	}
-
-	public double[] getSpeeds() {
-		return speeds;
-	}
-
-	public static Track read(String path) throws IOException
+	public Track(final String path) throws IOException
 	{
-		Track res = null;
-		// check it exists
-		File theFile = new File(path);
-		if(theFile.exists())
-		{
-			res = new Track(path);
-		}
-		
-		return res;
-	}
-	
-	public Track(final String path) throws IOException {
 
-		DateTimeFormatter formatter = DateTimeFormat
+		final DateTimeFormatter formatter = DateTimeFormat
 				.forPattern("yyMMdd HHmmss");
 
 		// Filename containing the data
-//		String csvFilename = "data/ArcTan_Data.csv";
+		// String csvFilename = "data/ArcTan_Data.csv";
 
 		// schema
 		// 100112 120000,SENSOR,12000.00 ,24000.00 ,0.00 ,205.00 ,4.12 ,100.00
@@ -67,8 +50,9 @@ public class Track {
 		// headings the result is stored in a list
 		CSVReader csvReader = null;
 
-		try {
-			FileReader fReader = new FileReader(path);
+		try
+		{
+			final FileReader fReader = new FileReader(path);
 			csvReader = new CSVReader(fReader, ',', '\'', 1);
 			final List<String[]> content = csvReader.readAll();
 			// variable to hold each row of the List while iterating through it
@@ -85,10 +69,11 @@ public class Track {
 			courses = new double[content.size()];
 			dates = new long[content.size()];
 
-			for (Object object : content) {
+			for (final Object object : content)
+			{
 				row = (String[]) object;
 				/* parsing data from the list to the variables */
-				String thisDate = row[0].toString();
+				final String thisDate = row[0].toString();
 				dates[counter] = formatter.parseDateTime(thisDate).getMillis();
 				x[counter] = (Double.parseDouble(row[2].toString()));
 				y[counter] = (Double.parseDouble(row[3].toString()));
@@ -96,10 +81,39 @@ public class Track {
 				speeds[counter] = (Double.parseDouble(row[6].toString()));
 				counter++;
 			}
-		} finally {
-			if(csvReader != null)
-				csvReader.close();
 		}
+		finally
+		{
+			if (csvReader != null)
+			{
+				csvReader.close();
+			}
+		}
+	}
+
+	public double[] getCourses()
+	{
+		return courses;
+	}
+
+	public long[] getDates()
+	{
+		return dates;
+	}
+
+	public double[] getSpeeds()
+	{
+		return speeds;
+	}
+
+	public double[] getX()
+	{
+		return x;
+	}
+
+	public double[] getY()
+	{
+		return y;
 	}
 
 }
